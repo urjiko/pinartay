@@ -12,14 +12,14 @@
 <body>
   <canvas id="space"></canvas>
   <script>
-    // Canvas setup
+    // Canvas kurulumu
     const canvas = document.getElementById('space');
     const ctx = canvas.getContext('2d');
     function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
     window.addEventListener('resize', resize);
     resize();
 
-    // Function added to CanvasRenderingContext2D prototype for drawing rounded rectangles
+    // Yuvarlatılmış dikdörtgen çizimi için CanvasRenderingContext2D prototipine eklenen fonksiyon
     CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
       if (w < 2*r) r = w/2;
       if (h < 2*r) r = h/2;
@@ -36,7 +36,7 @@
       this.closePath();
     };
 
-    // Global game state variables
+    // Global oyun durumu değişkenleri
     const letters = "ABCDEFGHIJKLMNOPRSTUVYZ'ÇÖÜİĞŞ".split(''); // Kullanılacak harfler
     const FIXED_LETTER_SIZE = 31; // Kelimelerdeki harflerin sabit boyutu için sabit
 
@@ -67,32 +67,32 @@
     const wordList = ["ALTAY","PINAR'A","ÇOK"]; // Önceden tanımlanmış kelimeler
     const wordGroups = { // İlk seçilen harfe göre dinamik kelimeler için seçenekler
       A:["AŞIK", "AZIYOR", "ACİZ", "ATEŞLİ"],
-Ö:["ÖLÜYOR", "ÖZLÜYOR"],
-B:["BİTİYOR", "BAĞIMLI"],
-E:["ERİYOR", "ESİR", "ETKİLİ"],
-Y:["YÜKSELİYOR", "YAKARIYOR"],
-T:["TAPIYOR", "TİTRİYOR"],
-H:["HAYRAN", "HUŞU"],
-C:["COŞUYOR", "ÇARESİZ", "CEZBELİ"],
-Ç:["ÇABALADI", "ÇEKİLİYOR", "ÇILGIN"],
-D:["DELİRİYOR", "DALMIŞ"],
-F:["FETİŞ", "FEDAİ"],
-G:["GÜLÜYOR", "GÖMÜLÜ"],
-I:["ISLAK", "IRGALANAN"],
-İ:["İSTEKLİ", "İSYANKAR"],
-K:["KALP", "KUDURUYOR"],
-L:["LOVE", "LAL"],
-M:["MÜPTELA", "MEST"],
-N:["NİYETLİ", "NEVRİYE"],
-O:["OKŞUYOR", "OBSESİF"],
-P:["PSPSPS", "PERVASIZ"],
-R:["RAZI", "RİTİMLİ"],
-S:["SEVİŞİYOR", "SUSMUYOR", "SARHOŞ"],
-Ş:["ŞEHVETLİ", "ŞAŞKIN"],
-U:["UYAR", "UNUTMUYOR"],
-Ü:["ÜLFET", "ÜRPERİYOR"],
-V:["VAKUM", "VURGUN"],
-Z:["ZİMMETLİ", "ZARİF"]
+      Ö:["ÖLÜYOR"],
+      B:["BİTİYOR", "BAĞIMLI"],
+      E:["ERİYOR", "ESİR"],
+      Y:["YÜKSELİYOR"],
+      T:["TAPIYOR", "TİTRİYOR"],
+      H:["HAYRAN"],
+      C:["COŞUYOR", "ÇARESİZ"],
+      Ç:["ÇABALADI"],
+      D:["DELİRİYOR"],
+      F:["FETİŞ", "FEDAİ"],
+      G:["GÜLÜYOR", "GÖMÜLÜ"],
+      I:["ISLAK"],
+      İ:["İSTEKLİ"],
+      K:["KALP", "KUDURUYOR", "KALDIRIYOR",],
+      L:["LOVE", "LAL"],
+      M:["MÜPTELA", "MEST"],
+      N:["NİYETLİ"],
+      O:["OKŞUYOR", "OBSESİF"],
+      P:["PSPSPS", "PERVASIZ"],
+      R:["RAZI", "RİTİMLİ"],
+      S:["SEVİŞİYOR", "SUSMUYOR", "SARHOŞ"],
+      Ş:["ŞEHVETLİ"],
+      U:["UYAR"],
+      Ü:["ÜLFET"],
+      V:["VAKUM", "VURGUN"],
+      Z:["ZİMMETLİ", "ZARİF"]
     };
     let wordIndex = 0;       // Önceden tanımlanmış kelime listesindeki mevcut indeks
     let currentWord = wordList[wordIndex]; // Şu anda oluşturulan kelime
@@ -110,14 +110,14 @@ Z:["ZİMMETLİ", "ZARİF"]
       }
       update() {
         this.x += this.vx; this.y += this.vy; // Parçacığı hareket ettir
-        this.life -= 0.02; // Ömrü azalt
+        this.life -= 0.04; // Ömrü azaltıldı (daha kısa sürmesi için)
       }
       draw() {
         if (this.life <= 0.1) return; // Neredeyse yoksa çizme
         ctx.globalAlpha = this.life; // Şeffaflığı ömrüne göre ayarla
         ctx.fillStyle = 'white';
         ctx.beginPath();
-        ctx.arc(this.x, this.y, 2, 0, Math.PI*2); // Küçük beyaz bir daire çiz
+        ctx.arc(this.x, this.y, 1, 0, Math.PI*2); // Küçük beyaz bir daire çiz (boyut küçültüldü)
         ctx.fill();
         ctx.globalAlpha = 1; // Şeffaflığı sıfırla
       }
@@ -194,7 +194,7 @@ Z:["ZİMMETLİ", "ZARİF"]
         if (this.isFinalDisplayStar) {
             if (finalDisplayAnimationRunning) {
                 let elapsed = Date.now() - finalDisplayAnimationStartTime;
-                let t = Math.min(1, elapsed / 10000); // Süreyi 0-1 aralığına normalize et (10 saniye boyunca)
+                let t = Math.min(1, elapsed / 7000); // Süreyi 0-1 aralığına normalize et (7 saniye boyunca)
                 this.x = this.originalX + (this.targetX - this.originalX) * t; // Hedefe doğru hareket et
                 this.y = this.originalY + (this.targetY - this.originalY) * t;
                 this.size = FIXED_LETTER_SIZE; // Animasyon sırasında sabit boyutu koru
@@ -536,7 +536,7 @@ Z:["ZİMMETLİ", "ZARİF"]
         const pinarStars = allCompletedWordStars[1];
         if (pinarStars && pinarStars.length >= 2) {
             const starApostrophe = pinarStars[pinarStars.length - 2];
-            const starA = pinarStars[pinarStars.length - 1];
+            const starA = pinarStars[pinarStars.length - 1]; // Hata düzeltildi: pinarPinar yerine pinarStars
 
             // Karakterleri boşalt ve alfa değerini 0 yap
             starApostrophe.char = '';
@@ -576,7 +576,7 @@ Z:["ZİMMETLİ", "ZARİF"]
     function initiateFinalWordDisplayAnimation() {
         finalDisplayAnimationRunning = true;
         finalDisplayAnimationStartTime = Date.now();
-        const animationDuration = 10000; // Animasyon süresi: 10 saniye
+        const animationDuration = 7000; // Animasyon süresi: 7 saniye (10000 yerine 7000)
 
         const totalWords = allCompletedWordStars.length; // Toplamda 4 kelime olmalı
         const lineHeight = 50; // Her kelime satırı için dikey boşluk
@@ -825,7 +825,7 @@ Z:["ZİMMETLİ", "ZARİF"]
 
           if (currentWord === 'ÇOK') { // 'ÇOK'tan dinamik kelime seçimine geçiş
               dynamicMode = true;
-              currentWord = ''; // Dinamik seçim aşamasını işaret etmek için currentWord'ü temizle
+              currentWord = ''; // Dinamik seçim aşmasını işaret etmek için currentWord'ü temizle
               currentIndex = 0; // Dinamik kelimenin ilk karakter seçimi için sıfırla
               secondPhase = false;
           } else if (wordIndex < wordList.length - 1) { // Bir sonraki önceden tanımlanmış kelimeye geç
@@ -868,6 +868,10 @@ Z:["ZİMMETLİ", "ZARİF"]
       backgroundDots = [];
       for(let i=0; i<500; i++) { // Daha fazla yoğunluk için 500 arka plan noktası oluştur
         const dot = new Star('•'); // '•' karakteriyle yeni bir Star oluştur
+        // Arka plan noktaları zaten başlangıçta canvas sınırları içinde oluşturulur.
+        // Konumları rastgele canvas genişliği ve yüksekliği içinde belirlenir.
+        dot.x = Math.random() * canvas.width;
+        dot.y = Math.random() * canvas.height;
         backgroundDots.push(dot);
       }
 
@@ -902,8 +906,8 @@ Z:["ZİMMETLİ", "ZARİF"]
         for (let i = 0; i < 3; i++) {
           particles.push(new Particle(
             mouse.x, mouse.y,
-            dx * 0.02 + (Math.random() - 0.5) * 0.5,
-            dy * 0.02 + (Math.random() - 0.5) * 1
+            dx * 0.02 + (Math.random() - 0.5) * 1.5, // Daha açılı çıkması için değer artırıldı
+            dy * 0.02 + (Math.random() - 0.5) * 2 // Daha açılı çıkması için değer artırıldı
           ));
         }
       }
@@ -993,7 +997,7 @@ Z:["ZİMMETLİ", "ZARİF"]
                 shouldIncrement = false; // Birden fazla 'O' için indeksi artırma
             } else if (currentIndex === 1 && charThrown === 'K') {
                 shouldAccept = true;
-                shouldIncrement = true; // 'K' için indeksi artır
+                shouldIncrement = true;
             }
         } else { // ALTAY, PINAR'A için
             if (charThrown === expectedCharForCurrentIndex) {
@@ -1212,12 +1216,22 @@ Z:["ZİMMETLİ", "ZARİF"]
         }
       }
 
-      // Mevcut hedef kelime rehberliğini çiz (Yalnızca son gösterimde veya dinamik seçim aşamasında değilse, bu kısım silindi.)
-      // Kullanıcının isteği üzerine bilgi metinleri kaldırıldı.
-
       requestAnimationFrame(animate); // Bir sonraki animasyon karesini iste
     }
     animate(); // Animasyon döngüsünü başlat
   </script>
 </body>
+<audio id="bg-music" autoplay loop>
+  <source src="stars-will-align.mp3" type="audio/mpeg">
+  Tarayıcınız bu ses dosyasını desteklemiyor.
+</audio>
+
+<script>
+  window.addEventListener('click', function () {
+    const music = document.getElementById('bg-music');
+    if (music && music.paused) {
+      music.play().catch(e => console.log("Müzik oynatılamadı:", e));
+    }
+  }, { once: true });
+</script>
 </html>
