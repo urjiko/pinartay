@@ -1,445 +1,652 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Harfli Uzay Oyunu</title>
-  <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; background: black; cursor: none; }
-    canvas { display: block; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harfli Uzay Oyunu</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: black; cursor: none; }
+    canvas { display: block; }
+  </style>
 </head>
 <body>
-  <canvas id="space"></canvas>
-  <script>
-    // Canvas setup
-    const canvas = document.getElementById('space');
-    const ctx = canvas.getContext('2d');
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-    window.addEventListener('resize', resize);
-    resize();
+  <canvas id="space"></canvas>
+  <script>
+    // Canvas setup
+    const canvas = document.getElementById('space');
+    const ctx = canvas.getContext('2d');
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
 
-    // Function added to CanvasRenderingContext2D prototype for drawing rounded rectangles
-    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
-      if (w < 2*r) r = w/2;
-      if (h < 2*r) r = h/2;
-      this.beginPath();
-      this.moveTo(x + r, y);
-      this.lineTo(x + w - r, y);
-      this.arcTo(x + w, y, x + w, y + r, r);
-      this.lineTo(x + w, y + h - r);
-      this.arcTo(x + w, y + h, x + w - r, y + h, r);
-      this.lineTo(x + r, y + h);
-      this.arcTo(x, y + h, x, y + h - r, r);
-      this.lineTo(x, y + r);
-      this.arcTo(x, y, x + r, y, r);
-      this.closePath();
-    };
+    // Function added to CanvasRenderingContext2D prototype for drawing rounded rectangles
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+      if (w < 2*r) r = w/2;
+      if (h < 2*r) r = h/2;
+      this.beginPath();
+      this.moveTo(x + r, y);
+      this.lineTo(x + w - r, y);
+      this.arcTo(x + w, y, x + w, y + r, r);
+      this.lineTo(x + w, y + h - r);
+      this.arcTo(x + w, y + h, x + w - r, y + h, r);
+      this.lineTo(x + r, y + h);
+      this.arcTo(x, y + h, x, y + h - r, r);
+      this.lineTo(x, y + r);
+      this.arcTo(x, y, x + r, y, r);
+      this.closePath();
+    };
 
-    // Global game state variables
-    const letters = "ABCDEFGHIJKLMNOPRSTUVYZ'ÇÖÜİĞŞ".split(''); // Letters to be used
-    const FIXED_LETTER_SIZE = 31; // Constant for the fixed size of letters in words
+    // Global game state variables
+    const letters = "ABCDEFGHIJKLMNOPRSTUVYZ'ÇÖÜİĞŞ".split(''); // Kullanılacak harfler
+    const FIXED_LETTER_SIZE = 31; // Kelimelerdeki harflerin sabit boyutu için sabit
 
-    let particles = []; // Particles for visual effects when mouse moves
-    let stars = [];     // Letters floating in space (stars)
-    let fixedLetters = []; // Letters placed to form a word
-    let held = null;    // Current letter/star dragged by the mouse
-    let mouse = { x:0, y:0, px:0, py:0, mx:0, my:0 }; // Mouse position and movement
-    let lastMove = Date.now(); // Timestamp of the last mouse movement
-    let keyTimers = {}; // To track how long a key is pressed
-    let activeKeys = new Set(); // Currently pressed keys
+    let particles = []; // Fare hareket ettiğinde oluşan görsel efekt parçacıkları
+    let stars = [];      // Uzayda yüzen harfler (yıldızlar)
+    let fixedLetters = []; // Bir kelime oluşturmak için yerleştirilen harfler
+    let held = null;     // Fare tarafından sürüklenen mevcut harf/yıldız
+    let mouse = { x:0, y:0, px:0, py:0, mx:0, my:0 }; // Fare konumu ve hareketi
+    let lastMove = Date.now(); // Son fare hareketinin zaman damgası
+    let keyTimers = {}; // Bir tuşun ne kadar süre basılı tutulduğunu izlemek için
+    let activeKeys = new Set(); // Şu anda basılı olan tuşlar
 
-    // New global variables for final display and animation of words
-    let allCompletedWordStars = [];      // Stores arrays of Star objects for each completed word
-    let finalDisplayAnimationRunning = false; // true during the 10-second gathering animation
-    let finalDisplayAnimationStartTime = 0;   // Timestamp when the final display animation started
-    let finalDisplayActive = false;       // true when words are permanently fixed in the center
+    // Kelimelerin son gösterimi ve animasyonu için yeni global değişkenler
+    let allCompletedWordStars = [];      // Tamamlanan her kelime için Star nesnelerinin dizilerini saklar
+    let finalDisplayAnimationRunning = false; // 10 saniyelik toplama animasyonu sırasında true olur
+    let finalDisplayAnimationStartTime = 0;    // Son gösterim animasyonunun başladığı zaman damgası
+    let finalDisplayActive = false;        // Kelimeler merkeze kalıcı olarak sabitlendiğinde true olur
 
-    // New global variables for the background panel
-    let panelRect = { x: 0, y: 0, width: 0, height: 0 };
-    let panelRadius = 20; // Radius for rounded corners of the panel
+    // Arka plan paneli için yeni global değişkenler
+    let panelRect = { x: 0, y: 0, width: 0, height: 0 };
+    let panelRadius = 20; // Panelin yuvarlak köşeleri için yarıçap
+
+    // Ek efektler için yeni global değişkenler
+    let shootingStars = []; // Kayan yıldız efekti için
+    let backgroundDots = []; // Statik parlayan arka plan noktaları için
+
+    // Oyun ilerlemesi için kelime listeleri
+    const wordList = ["ALTAY","PINAR'A","ÇOK"]; // Önceden tanımlanmış kelimeler
+    const wordGroups = { // İlk seçilen harfe göre dinamik kelimeler için seçenekler
+      A:["AŞIK", "AZIYOR", "ACİZ", "ATEŞLİ"],
+Ö:["ÖLÜYOR", "ÖZLÜYOR"],
+B:["BİTİYOR", "BAĞIMLI"],
+E:["ERİYOR", "ESİR", "ETKİLİ"],
+Y:["YÜKSELİYOR", "YAKARIYOR"],
+T:["TAPIYOR", "TİTRİYOR"],
+H:["HAYRAN", "HUŞU"],
+C:["COŞUYOR", "ÇARESİZ", "CEZBELİ"],
+Ç:["ÇABALADI", "ÇEKİLİYOR", "ÇILGIN"],
+D:["DELİRİYOR", "DALMIŞ"],
+F:["FETİŞ", "FEDAİ"],
+G:["GÜLÜYOR", "GÖMÜLÜ"],
+I:["ISLAK", "IRGALANAN"],
+İ:["İSTEKLİ", "İSYANKAR"],
+K:["KALP", "KUDURUYOR"],
+L:["LOVE", "LAL"],
+M:["MÜPTELA", "MEST"],
+N:["NİYETLİ", "NEVRİYE"],
+O:["OKŞUYOR", "OBSESİF"],
+P:["PSPSPS", "PERVASIZ"],
+R:["RAZI", "RİTİMLİ"],
+S:["SEVİŞİYOR", "SUSMUYOR", "SARHOŞ"],
+Ş:["ŞEHVETLİ", "ŞAŞKIN"],
+U:["UYAR", "UNUTMUYOR"],
+Ü:["ÜLFET", "ÜRPERİYOR"],
+V:["VAKUM", "VURGUN"],
+Z:["ZİMMETLİ", "ZARİF"]
+    };
+    let wordIndex = 0;       // Önceden tanımlanmış kelime listesindeki mevcut indeks
+    let currentWord = wordList[wordIndex]; // Şu anda oluşturulan kelime
+    let currentIndex = 0;    // currentWord içindeki mevcut harf indeksi
+    let dynamicMode = false; // Dinamik bir kelimenin ilk harfi seçildiğinde true olur
+    let options = [];        // İlk harf seçiminden sonra olası dinamik kelimeler
+    let secondPhase = false; // Dinamik bir kelimenin ikinci harfi seçildiğinde true olur (birden fazla seçenek varsa)
+
+    // Parçacık sınıfı (görsel efektler için)
+    class Particle {
+      constructor(x,y,vx,vy) {
+        this.x=x; this.y=y; // Konum
+        this.vx=vx; this.vy=vy; // Hız
+        this.life=1; // Ömür döngüsü (zamanla azalır)
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy; // Parçacığı hareket ettir
+        this.life -= 0.02; // Ömrü azalt
+      }
+      draw() {
+        if (this.life <= 0.1) return; // Neredeyse yoksa çizme
+        ctx.globalAlpha = this.life; // Şeffaflığı ömrüne göre ayarla
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 2, 0, Math.PI*2); // Küçük beyaz bir daire çiz
+        ctx.fill();
+        ctx.globalAlpha = 1; // Şeffaflığı sıfırla
+      }
+    }
+
+    // Yıldız (Harf) sınıfı
+    class Star {
+      constructor(c) {
+        this.char = c || letters[Math.floor(Math.random()*letters.length)]; // Rastgele bir harf veya belirtilen harfi ata
+        this.x = Math.random()*canvas.width; // Rastgele başlangıç X konumu
+        this.y = Math.random()*canvas.height; // Rastgele başlangıç Y konumu
+        this.vx = (Math.random()-0.5)*0.3; // Rastgele başlangıç X hızı
+        this.vy = (Math.random()-0.5)*0.3; // Rastgele başlangıç Y hızı
+        this.baseSize = 14 + Math.random()*8; // Temel yazı tipi boyutu
+        this.size = this.baseSize; // Mevcut yazı tipi boyutu
+        this.alpha = 0.3 + Math.random()*0.7; // Şeffaflık
+        this.angle = Math.random()*Math.PI*2; // Başlangıç dönüş açısı
+        this.spin = (Math.random()-0.5)*0.01; // Dönüş hızı
+        this.fixed = false; // Harf tamamlanmış bir kelimenin parçasıysa true olur
+        this.wordIndex = wordIndex; // Bu yıldızın ait olduğu kelime indeksi (kalp dönüşümü için kullanışlı)
+        this.isAnimatingThrow = false; // Fırlatma animasyonu sırasında true olur
+
+        // Son gösterim animasyonu ve dağılma için yeni özellikler
+        this.originalX = this.x;
+        this.originalY = this.y;
+        this.targetX = this.x;
+        this.targetY = this.y;
+        this.isFinalDisplayStar = false; // Son merkezlenmiş gösterimin parçası olacak yıldızları işaretlemek için bayrak
+        this.isScatteredHeart = false;    // Dağılmış bir kalp olarak işaretlemek için bayrak
+        this.isBackgroundDot = false;     // Statik arka plan noktaları için bayrak
+
+        // Sabitlenmiş harfler için yeni özellikler: Hedef konumlar (düzgün hareket için)
+        this.targetFixedX = null;
+        this.targetFixedY = null;
+
+        // Arka plan noktaları için (Star, arka plan noktaları için özel olarak oluşturulursa bu mantık tetiklenir)
+        if (c === '•' && arguments.length === 1) { // Eğer özellikle arka plan noktası olarak oluşturuluyorsa
+          this.isBackgroundDot = true;
+          this.alpha = 0.1 + Math.random() * 0.7; // Daha yumuşak parlama, ancak bazıları daha parlak
+          this.size = 2 + Math.random() * 8; // Daha küçükten biraz daha büyüğe kadar noktalar
+          this.vx = this.vy = 0; // Hareket etmez
+          this.char = '•'; // Basit bir nokta karakteri kullan
+        }
+      }
+      update() {
+        // Arka plan noktaları hareket etmez
+        if (this.isBackgroundDot) {
+          return;
+        }
+
+        // Eğer fırlatma animasyonu aktifse, diğer hareketleri atla
+        if (this.isAnimatingThrow) {
+          return;
+        }
+
+        // Eğer bu yıldız dağılmış bir kalpse, benzersiz güncelleme mantığını uygula
+        if (this.isScatteredHeart) {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vx *= 0.98; // Sönümleme
+            this.vy *= 0.98; // Sönümleme
+            this.alpha -= 0.003; // Yavaşça kaybol
+            if (this.alpha <= 0) {
+                // Tamamen kaybolduğunda yıldızı global yıldızlar dizisinden kaldır
+                const index = stars.indexOf(this);
+                if (index > -1) {
+                    stars.splice(index, 1);
+                }
+            }
+            return; // Diğer güncelleme mantığını atla
+        }
+
+        // Eğer bu yıldız son, sabit gösterimin bir parçasıysa (ALTAY, PINAR veya kaybolan 'A)
+        if (this.isFinalDisplayStar) {
+            if (finalDisplayAnimationRunning) {
+                let elapsed = Date.now() - finalDisplayAnimationStartTime;
+                let t = Math.min(1, elapsed / 10000); // Süreyi 0-1 aralığına normalize et (10 saniye boyunca)
+                this.x = this.originalX + (this.targetX - this.originalX) * t; // Hedefe doğru hareket et
+                this.y = this.originalY + (this.targetY - this.originalY) * t;
+                this.size = FIXED_LETTER_SIZE; // Animasyon sırasında sabit boyutu koru
+                this.alpha = 1; // Animasyon sırasında tam opaklık
+            } else if (finalDisplayActive) {
+                // Animasyondan sonra kalıcı olarak merkeze sabitlendi
+                this.x = this.targetX;
+                this.y = this.targetY;
+                this.size = FIXED_LETTER_SIZE; // Son boyutu koru
+                // Karakter boş bir dizeyse alfa değerini 0, aksi takdirde 1 yap
+                this.alpha = (this.char === '') ? 0 : 1;
+            }
+            this.vx = 0; this.vy = 0; // Herhangi bir hızı durdur
+            return; // Normal yıldız hareketini atla
+        }
+
+        // Eğer harf sabitlenmişse (bir kelimenin parçasıysa)
+        if (this.fixed) {
+            // Hedef konuma düzgün hareket
+            if (this.targetFixedX !== null && Math.abs(this.x - this.targetFixedX) > 0.5) {
+                this.x += (this.targetFixedX - this.x) * 0.15; // Düzgün geçiş hızı
+            } else if (this.targetFixedX !== null) {
+                this.x = this.targetFixedX; // Yeterince yakınsa sabitle
+                this.targetFixedX = null; // Hedefe ulaşıldı, sıfırla
+            }
+
+            if (this.targetFixedY !== null && Math.abs(this.y - this.targetFixedY) > 0.5) {
+                this.y += (this.targetFixedY - this.y) * 0.15; // Düzgün geçiş hızı
+            } else if (this.targetFixedY !== null) {
+                this.y = this.targetFixedY; // Yeterince yakınsa sabitle
+                this.targetFixedY = null; // Hedefe ulaşıldı, sıfırla
+            }
+            return; // Sabitlenmiş harfler diğer hareket mantığını kullanmaz
+        }
+
+        // Mevcut normal yıldız güncelleme mantığı (yalnızca finalDisplayStar veya ScatteredHeart olmayan yıldızlar için)
+        if (held === this) { // Bu yıldız fare tarafından tutuluyorsa
+          this.x = mouse.x; this.y = mouse.y; // Fareyi takip et
+          this.vx = this.vy = 0; // Hareketi durdur
+          return;
+        }
+        this.x += this.vx; // Hızı uygula
+        this.y += this.vy;
+        // Canvas kenarlarından sekme
+        if (this.x < 0) { this.x = 0; this.vx *= -0.5; }
+        if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -0.5; }
+        if (this.y < 0) { this.y = 0; this.vy *= -0.5; }
+        if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -0.5; }
+        if (!this.fixed) this.angle += this.spin; // Sabitlenmemişse döndür
+
+        // Fare son zamanlarda hareket ettiyse fareye çekim efekti
+        const dt = Date.now() - lastMove;
+        if (dt < 2000) { // Fare son 2 saniyede hareket ettiyse
+          let dx = mouse.x - this.x;
+          let dy = mouse.y - this.y;
+          let d = Math.hypot(dx, dy); // Fareye olan uzaklık
+          if (d < 150 && held !== this) { // Çekim yarıçapı içindeyse ve tutulmuyorsa
+            let s = (150 - d)/150; // Çekim gücü
+            this.x += dx*0.05*s; // Fareye doğru hareket et
+            this.y += dy*0.05*s;
+            this.size = this.baseSize*(1-0.4*s); // Biraz küçül
+          }
+        } else {
+          this.size += (this.baseSize - this.size)*0.1; // Fare etkileşimi yoksa temel boyuta geri dön
+        }
+
+        // Bir tuşa basıldığında hızlanma efekti (aynı harfleri fareye doğru çeker)
+        for (let k of activeKeys) {
+          if (k === this.char) {
+            let dur = (Date.now() - keyTimers[k]) / 1000; // Tuşa basılma süresi
+            let boost = Math.min(dur, 3); // Maksimum hızlanma
+            let dx = mouse.x - this.x;
+            let dy = mouse.y - this.y;
+            this.x += dx*0.01*boost; // Fareye doğru hareket et
+            this.y += dy*0.01*boost;
+          }
+        }
+      }
+      draw() {
+        ctx.save();
+
+        if (this.isBackgroundDot) {
+          ctx.translate(this.x, this.y);
+          ctx.globalAlpha = this.alpha;
+          ctx.fillStyle = 'white';
+          ctx.shadowColor = 'white';
+          ctx.shadowBlur = this.size / 2 + Math.random() * 5; // Boyutuna göre daha çeşitli parlama
+          ctx.font = this.size + 'px Inter, sans-serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(this.char, 0, 0);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+          return;
+        }
+
+        if (this.isScatteredHeart) {
+            if (this.alpha <= 0) { // Tamamen kaybolduysa çizme
+                ctx.restore();
+                return;
+            }
+            ctx.translate(this.x, this.y);
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = 'white'; // Kalpler beyazdır
+            ctx.font = this.size + 'px Inter, sans-serif'; // Mevcut boyutu kullan
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(this.char, 0, 0);
+            ctx.restore();
+            ctx.globalAlpha = 1;
+            return;
+        }
+
+        if (this.isFinalDisplayStar) {
+            if (this.char === '' && this.alpha === 0) { // Kaybolan parçaları çizme
+                ctx.restore();
+                return;
+            }
+            ctx.translate(this.x, this.y);
+            ctx.globalAlpha = this.alpha; // Mevcut alfa değerini kullan
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'white'; ctx.shadowBlur = 8;
+            ctx.font = this.size + 'px Inter, sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(this.char, 0, 0);
+            ctx.restore();
+            ctx.globalAlpha = 1;
+            return;
+        }
+
+        // Mevcut normal yıldız çizim mantığı
+        // Yalnızca fixed ise VE animasyon devam etmiyorsa titreme (lev) hareketini uygula
+        let lev = (this.fixed && !this.isAnimatingThrow) ? Math.sin(Date.now()/500 + this.x)*1.5 : 0;
+        ctx.translate(this.x, this.y + lev); // this.x, this.y update fonksiyonu tarafından ayarlanır
+        if (!this.fixed) ctx.rotate(this.angle); // Sabitlenmemişse döndür
+        if (this.fixed) { // Sabitlenmiş harfler için stil (bir kelimenin parçası)
+          ctx.save();
+          ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Yarı şeffaf siyah arka plan
+          ctx.roundRect(-this.size*0.45, -this.size*0.45, this.size*0.9, this.size*0.9, this.size*0.25);
+          ctx.fill();
+          ctx.restore();
+          ctx.fillStyle = 'white'; // Beyaz harf
+          ctx.shadowColor = 'white'; ctx.shadowBlur = 3; // Hafif parlama
+        } else { // Serbestçe yüzen harfler için stil
+          ctx.globalAlpha = this.alpha; // Şeffaflığı uygula
+          ctx.fillStyle = 'white'; ctx.shadowColor = 'white'; ctx.shadowBlur = 4; // Daha güçlü parlamalı beyaz harf
+        }
+        ctx.font = (held===this ? this.size*2 : this.size) + 'px Inter, sans-serif'; // Tutuluyorsa daha büyük
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(this.char, 0, 0); // Harfi çiz
+        ctx.restore();
+        ctx.globalAlpha = 1; // Şeffaflığı sıfırla
+      }
+    }
+
+    // Kayan Yıldız sınıfı (çizgi ışıklar için)
+    class ShootingStar {
+      constructor() {
+        this.size = 2 + Math.random() * 4;
+        this.life = 1;
+        this.trailLength = 50 + Math.random() * 100; // Uzunluk
+        this.duration = 2000 + Math.random() * 3000; // Hareket süresi
+        this.startTime = Date.now();
+        this.isCurved = Math.random() < 0.6; // %60 ihtimalle kavisli olsun
+
+        // Rastgele bir kenardan başla ve rastgele bir kenara git
+        const startSide = Math.floor(Math.random() * 4);
+        const endSide = Math.floor(Math.random() * 4);
+
+        if (startSide === 0) { // Üst
+          this.startX = Math.random() * canvas.width;
+          this.startY = -this.size;
+        } else if (startSide === 1) { // Sağ
+          this.startX = canvas.width + this.size;
+          this.startY = Math.random() * canvas.height;
+        } else if (startSide === 2) { // Alt
+          this.startX = Math.random() * canvas.width;
+          this.startY = canvas.height + this.size;
+        } else { // Sol
+          this.startX = -this.size;
+          this.startY = Math.random() * canvas.height;
+        }
+
+        if (endSide === 0) { // Üst
+          this.endX = Math.random() * canvas.width;
+          this.endY = -this.size;
+        } else if (endSide === 1) { // Sağ
+          this.endX = canvas.width + this.size;
+          this.endY = Math.random() * canvas.height;
+        } else if (endSide === 2) { // Alt
+          this.endX = Math.random() * canvas.width;
+          this.endY = canvas.height + this.size;
+        } else { // Sol
+          this.endX = -this.size;
+          this.endY = Math.random() * canvas.height;
+        }
+
+        // Kontrol noktası kavisli yıldızlar için
+        if (this.isCurved) {
+          let midX = (this.startX + this.endX) / 2;
+          let midY = (this.startY + this.endY) / 2;
+          // Başlangıç ve bitiş noktasına göre dik bir ofset ile kontrol noktası belirle
+          let dx = this.endX - this.startX;
+          let dy = this.endY - this.startY;
+          let normalX = -dy; // Normal vektörün X bileşeni
+          let normalY = dx;  // Normal vektörün Y bileşeni
+          let length = Math.hypot(normalX, normalY);
+          if (length > 0) {
+              normalX /= length;
+              normalY /= length;
+          }
+          let offsetMagnitude = (Math.random() - 0.5) * 400; // Ofset büyüklüğü
+          this.cpX = midX + normalX * offsetMagnitude;
+          this.cpY = midY + normalY * offsetMagnitude;
+        } else {
+          this.cpX = this.startX; // Düz hareket için cpX ve cpY'yi başlat
+          this.cpY = this.startY;
+        }
+
+        this.x = this.startX;
+        this.y = this.startY;
+      }
+
+      update() {
+        const elapsed = Date.now() - this.startTime;
+        let t = elapsed / this.duration;
+        this.life = 1 - t; // Zamanla kaybol
+
+        if (t > 1) {
+          this.life = 0;
+          return;
+        }
+
+        if (this.isCurved) {
+          // Quadratic Bezier eğrisi formülü: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+          this.x = (1 - t) * (1 - t) * this.startX + 2 * (1 - t) * t * this.cpX + t * t * this.endX;
+          this.y = (1 - t) * (1 - t) * this.startY + 2 * (1 - t) * t * this.cpY + t * t * this.endY;
+        } else {
+          // Düz çizgi hareketi
+          this.x = this.startX + (this.endX - this.startX) * t;
+          this.y = this.startY + (this.endY - this.startY) * t;
+        }
+      }
+
+      draw() {
+        if (this.life <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = 'white';
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = this.size * 2;
+
+        // Kayan yıldızın ana noktası
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Kuyruk
+        // Kuyruk için, anlık konumdan geriye doğru hız vektörü doğrultusunda bir çizgi çizeriz.
+        // Kavisli yörüngelerde bile bu iyi bir görsel approximation sağlar.
+        let tailCurrentX, tailCurrentY;
+        if (this.isCurved) {
+            // Anlık hız vektörünü tahmin etmek için t-epsilon ve t+epsilon noktalarını kullanabiliriz.
+            // Daha basit bir yaklaşım olarak, başlangıç ve bitiş noktalarına göre anlık konumun
+            // eğri üzerindeki "yönünü" kullanarak kuyruğu çizebiliriz.
+            const t = (Date.now() - this.startTime) / this.duration;
+            let prevT = Math.max(0, t - 0.05); // Biraz gerideki nokta
+            let prevX, prevY;
+
+            if (this.isCurved) {
+                prevX = (1 - prevT) * (1 - prevT) * this.startX + 2 * (1 - prevT) * prevT * this.cpX + prevT * prevT * this.endX;
+                prevY = (1 - prevT) * (1 - prevT) * this.startY + 2 * (1 - prevT) * prevT * this.cpY + prevT * prevT * this.endY;
+            } else {
+                prevX = this.startX + (this.endX - this.startX) * prevT;
+                prevY = this.startY + (this.endY - this.startY) * prevT;
+            }
+            tailCurrentX = this.x - (this.x - prevX) * this.trailLength / (this.size * 5); // Basit bir ölçekleme
+            tailCurrentY = this.y - (this.y - prevY) * this.trailLength / (this.size * 5);
+        } else {
+            // Düz hareket için
+            const ratio = this.trailLength / (this.size * 10); // Kuyruk uzunluğunu boyuta göre ayarla
+            tailCurrentX = this.x - (this.endX - this.startX) * ratio;
+            tailCurrentY = this.y - (this.endY - this.startY) * ratio;
+        }
+        
+        const gradient = ctx.createLinearGradient(this.x, this.y, tailCurrentX, tailCurrentY);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = this.size / 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(tailCurrentX, tailCurrentY);
+        ctx.stroke();
+
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
 
 
-    // Word lists for game progression
-    const wordList = ["ALTAY","PINAR'A","ÇOK"]; // Predefined words
-    const wordGroups = { // Options for dynamic words based on the first selected letter
-      A:["AŞIK","AZIYOR"], Ö:["ÖLÜYOR"], B:["BİTİYOR"], E:["ERİYOR"],
-      Y:["YÜKSELİYOR"], T:["TAPIYOR"], H:["HAYRAN"],
-      C:["COŞUYOR"], Ç:["ÇABALADI"], D:["DELİRİYOR"], F:["FETİŞ"], G:["GÜLÜYOR"],
-      I:["ISLAK"], İ:["İSTEKLİ"], K:["KALP"], L:["LOVE"], M:["MÜPTELA"],
-      N:["NİYETLİ"], O:["OKŞUYOR"], P:["PSPSPS"], R:["RAZI"],
-      S:["SEVİŞİYOR"], Ş:["ŞEHVETLİ"], U:["UYAR"], Ü:["ÜLFET"],
-      V:["VAKUM"], Z:["ZİMMETLİ"]
-    };
-    let wordIndex = 0;      // Current index in the predefined word list
-    let currentWord = wordList[wordIndex]; // Word currently being formed
-    let currentIndex = 0;   // Current letter index within currentWord
-    let dynamicMode = false; // true when selecting the first letter of a dynamic word
-    let options = [];        // Possible dynamic words after first letter selection
-    let secondPhase = false; // true when selecting the second letter of a dynamic word (if multiple options)
+    // Seçilen kelimeleri kalplere dönüştürme ve dağıtma fonksiyonu (ÇOK ve Dinamik Kelime)
+    function transformSelectedWordsToHeartsAndScatter() {
+        const shapes = ['❤︎','♡']; // Kalp şekilleri
+        let delay = 0;
 
-    // Particle class for visual effects
-    class Particle {
-      constructor(x,y,vx,vy) {
-        this.x=x; this.y=y; // Position
-        this.vx=vx; this.vy=vy; // Velocity
-        this.life=1; // Life cycle (decreases over time)
-      }
-      update() {
-        this.x += this.vx; this.y += this.vy; // Move particle
-        this.life -= 0.02; // Decrease life
-      }
-      draw() {
-        if (this.life <= 0.1) return; // Don't draw if almost gone
-        ctx.globalAlpha = this.life; // Set transparency based on life
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 2, 0, Math.PI*2); // Draw a small white circle
-        ctx.fill();
-        ctx.globalAlpha = 1; // Reset transparency
-      }
-    }
+        // allCompletedWordStars dizisindeki 2. indeks ('ÇOK') ve 3. indeks (dinamik kelime)
+        const wordsToTransform = [allCompletedWordStars[2], allCompletedWordStars[3]];
 
-    // Star (Letter) class
-    class Star {
-      constructor(c) {
-        this.char = c || letters[Math.floor(Math.random()*letters.length)]; // Assign a random letter or specified letter
-        this.x = Math.random()*canvas.width; // Random starting X position
-        this.y = Math.random()*canvas.height; // Random starting Y position
-        this.vx = (Math.random()-0.5)*0.3; // Random starting X velocity
-        this.vy = (Math.random()-0.5)*0.3; // Random starting Y velocity
-        this.baseSize = 14 + Math.random()*8; // Base font size
-        this.size = this.baseSize; // Current font size
-        this.alpha = 0.3 + Math.random()*0.7; // Transparency
-        this.angle = Math.random()*Math.PI*2; // Starting rotation angle
-        this.spin = (Math.random()-0.5)*0.01; // Rotation speed
-        this.fixed = false; // true if letter is part of a completed word
-        this.wordIndex = wordIndex; // Word index this star belongs to (useful for heart transformation)
+        wordsToTransform.forEach(wordStars => {
+            if (!wordStars) return; // Kelime yoksa güvenlik kontrolü
 
-        // New properties for final display animation and scattering
-        this.originalX = this.x;
-        this.originalY = this.y;
-        this.targetX = this.x;
-        this.targetY = this.y;
-        this.isFinalDisplayStar = false; // Flag to mark stars that will be part of the final centered display
-        this.isScatteredHeart = false;   // Flag to mark as a scattered heart
+            wordStars.forEach(star => {
+                setTimeout(() => {
+                    star.char = shapes[Math.floor(Math.random()*shapes.length)]; // Harfi kalbe dönüştür
+                    // Dönüştürülen kalpten parçacıklar yay
+                    for (let i = 0; i < 8; i++) {
+                        let ang = Math.random()*Math.PI*2;
+                        let spd = 1 + Math.random();
+                        particles.push(new Particle(star.x, star.y, Math.cos(ang)*spd, Math.sin(ang)*spd));
+                    }
+                    star.isFinalDisplayStar = false; // Artık sabit merkez gösterimin bir parçası değil
+                    star.fixed = false; // Hareket etmesine izin ver
+                    star.isScatteredHeart = true; // Dağılmış ve kaybolan kalp olarak işaretle
+                    star.vx = (Math.random() - 0.5) * 5; // Başlangıç dağılma hızı
+                    star.vy = (Math.random() - 0.5) * 5;
+                    star.alpha = 1; // Tam opaklıkla başla
+                    star.size = 40; // Kalpler için büyük boyutu koru
+                }, delay);
+                delay += 100; // Harfler arasında küçük gecikme
+            });
+            delay += 500; // Kelimeler arasında daha büyük gecikme
+        });
+    }
 
-        // New properties: Target positions for fixed letters (for smooth movement)
-        this.targetFixedX = null;
-        this.targetFixedY = null;
-      }
-      update() {
-        // If this star is a scattered heart, apply unique update logic
-        if (this.isScatteredHeart) {
-            this.x += this.vx;
-            this.y += this.vy;
-            this.vx *= 0.98; // Dampening
-            this.vy *= 0.98; // Dampening
-            this.alpha -= 0.003; // Slowly fade out
-            if (this.alpha <= 0) {
-                // Remove star from global stars array when completely faded
-                const index = stars.indexOf(this);
-                if (index > -1) {
-                    stars.splice(index, 1);
-                }
-            }
-            return; // Skip other update logic
-        }
+    // "PINAR'A" kelimesinin sonundaki "'A" karakterlerini kaldırma fonksiyonu
+    function removePinarATail() {
+        // allCompletedWordStars dizisindeki 1. indeks ("PINAR'A")
+        const pinarStars = allCompletedWordStars[1];
+        if (pinarStars && pinarStars.length >= 2) {
+            const starApostrophe = pinarStars[pinarStars.length - 2];
+            const starA = pinarStars[pinarStars.length - 1];
 
-        // If this star is part of the final, fixed display (ALTAY, PINAR or disappearing 'A)
-        if (this.isFinalDisplayStar) {
-            if (finalDisplayAnimationRunning) {
-                let elapsed = Date.now() - finalDisplayAnimationStartTime;
-                let t = Math.min(1, elapsed / 10000); // Normalize time to 0-1 range (over 10 seconds)
-                this.x = this.originalX + (this.targetX - this.originalX) * t; // Move towards target
-                this.y = this.originalY + (this.targetY - this.originalY) * t;
-                this.size = FIXED_LETTER_SIZE; // Maintain fixed size during animation
-                this.alpha = 1; // Full opacity during animation
-            } else if (finalDisplayActive) {
-                // Permanently fixed in center after animation
-                this.x = this.targetX;
-                this.y = this.targetY;
-                this.size = FIXED_LETTER_SIZE; // Maintain final size
-                // Set alpha to 0 if character is empty string, otherwise 1
-                this.alpha = (this.char === '') ? 0 : 1;
-            }
-            this.vx = 0; this.vy = 0; // Stop any velocity
-            return; // Skip normal star movement
-        }
+            // Karakterleri boşalt ve alfa değerini 0 yap
+            starApostrophe.char = '';
+            starApostrophe.alpha = 0;
+            starA.char = '';
+            starA.alpha = 0;
+        }
+    }
 
-        // If the letter is fixed (part of a word)
-        if (this.fixed) {
-            // Smooth movement towards target position
-            if (this.targetFixedX !== null && Math.abs(this.x - this.targetFixedX) > 0.5) {
-                this.x += (this.targetFixedX - this.x) * 0.15; // Smooth transition speed
-            } else if (this.targetFixedX !== null) {
-                this.x = this.targetFixedX; // Fix if close enough
-                this.targetFixedX = null; // Target reached, reset
-            }
+    // Arka plan yıldızlarını kalplere dönüştürme ve dağıtma fonksiyonu
+    function transformBackgroundStarsToHeartsAndScatter() {
+        const shapes = ['❤︎','♡'];
+        let delay = 0;
 
-            if (this.targetFixedY !== null && Math.abs(this.y - this.targetFixedY) > 0.5) {
-                this.y += (this.targetFixedY - this.y) * 0.15; // Smooth transition speed
-            } else if (this.targetFixedY !== null) {
-                this.y = this.targetFixedY; // Fix if close enough
-                this.targetFixedY = null; // Target reached, reset
-            }
-            return; // Fixed letters don't use other movement logic
-        }
+        // finalDisplayStar veya ScatteredHeart olmayan tüm yıldızları filtrele
+        stars.filter(star => !star.isFinalDisplayStar && !star.isScatteredHeart && !star.isBackgroundDot).forEach(star => {
+            setTimeout(() => {
+                star.char = shapes[Math.floor(Math.random()*shapes.length)]; // Harfi kalbe dönüştür
+                // Dönüştürülen kalpten parçacıklar yay
+                for (let i = 0; i < 8; i++) {
+                    let ang = Math.random()*Math.PI*2;
+                    let spd = 1 + Math.random();
+                    particles.push(new Particle(star.x, star.y, Math.cos(ang)*spd, Math.sin(ang)*spd));
+                }
+                star.fixed = false; // Sabitlenmişse hareket etmesine izin ver
+                star.isScatteredHeart = true; // Dağılmış ve kaybolan kalp olarak işaretle
+                star.alpha = 1; // Tam opaklıkla başla
+                star.vx = (Math.random() - 0.5) * 3; // Başlangıç dağılma hızı (biraz daha az)
+                star.vy = (Math.random() - 0.5) * 3;
+                star.size = 20 + Math.random() * 10; // Makul bir boyut ver
+            }, delay);
+            delay += 50; // Arka plan yıldız dönüşümleri arasında kademeli gecikme
+        });
+    }
 
-        // Current normal star update logic (only for stars that are not finalDisplayStar or ScatteredHeart)
-        if (held === this) { // If this star is held by the mouse
-          this.x = mouse.x; this.y = mouse.y; // Follow mouse
-          this.vx = this.vy = 0; // Stop movement
-          return;
-        }
-        this.x += this.vx; // Apply velocity
-        this.y += this.vy;
-        // Bounce off canvas edges
-        if (this.x < 0) { this.x = 0; this.vx *= -0.5; }
-        if (this.x > canvas.width) { this.x = canvas.width; this.vx *= -0.5; }
-        if (this.y < 0) { this.y = 0; this.vy *= -0.5; }
-        if (this.y > canvas.height) { this.y = canvas.height; this.vy *= -0.5; }
-        if (!this.fixed) this.angle += this.spin; // Rotate if not fixed
+    // Son kelime gösterim animasyonunu başlatma fonksiyonu
+    function initiateFinalWordDisplayAnimation() {
+        finalDisplayAnimationRunning = true;
+        finalDisplayAnimationStartTime = Date.now();
+        const animationDuration = 10000; // Animasyon süresi: 10 saniye
 
-        // Attraction effect towards mouse if mouse moved recently
-        const dt = Date.now() - lastMove;
-        if (dt < 2000) { // If mouse moved within the last 2 seconds
-          let dx = mouse.x - this.x;
-          let dy = mouse.y - this.y;
-          let d = Math.hypot(dx, dy); // Distance to mouse
-          if (d < 150 && held !== this) { // If within attraction radius and not held
-            let s = (150 - d)/150; // Attraction strength
-            this.x += dx*0.05*s; // Move towards mouse
-            this.y += dy*0.05*s;
-            this.size = this.baseSize*(1-0.4*s); // Shrink slightly
-          }
-        } else {
-          this.size += (this.baseSize - this.size)*0.1; // Return to base size if no mouse interaction
-        }
+        const totalWords = allCompletedWordStars.length; // Toplamda 4 kelime olmalı
+        const lineHeight = 50; // Her kelime satırı için dikey boşluk
+        const totalDisplayHeight = totalWords * lineHeight;
+        const startY = (canvas.height - totalDisplayHeight) / 2; // İlk kelime için başlangıç Y konumu
 
-        // Acceleration effect when a key is pressed (attracts same letters towards mouse)
-        for (let k of activeKeys) {
-          if (k === this.char) {
-            let dur = (Date.now() - keyTimers[k]) / 1000; // Duration key has been pressed
-            let boost = Math.min(dur, 3); // Maximum boost
-            let dx = mouse.x - this.x;
-            let dy = mouse.y - this.y;
-            this.x += dx*0.01*boost; // Move towards mouse
-            this.y += dy*0.01*boost;
-          }
-        }
-      }
-      draw() {
-        ctx.save();
+        let minPanelX = canvas.width;
+        let maxPanelX = 0;
+        let minPanelY = canvas.height;
+        let maxPanelY = 0;
 
-        if (this.isScatteredHeart) {
-            if (this.alpha <= 0) { // Don't draw if completely faded
-                ctx.restore();
-                return;
-            }
-            ctx.translate(this.x, this.y);
-            ctx.globalAlpha = this.alpha;
-            ctx.fillStyle = 'white'; // Hearts are white
-            ctx.font = this.size + 'px Inter, sans-serif'; // Use current size
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(this.char, 0, 0);
-            ctx.restore();
-            ctx.globalAlpha = 1;
-            return;
-        }
+        ctx.font = `${FIXED_LETTER_SIZE}px Inter, sans-serif`; // Panel boyutu hesaplaması için doğru yazı tipini kullan
 
-        if (this.isFinalDisplayStar) {
-            if (this.char === '' && this.alpha === 0) { // Don't draw disappearing parts
-                ctx.restore();
-                return;
-            }
-            ctx.translate(this.x, this.y);
-            ctx.globalAlpha = this.alpha; // Use current alpha value
-            ctx.fillStyle = 'white';
-            ctx.shadowColor = 'white'; ctx.shadowBlur = 8;
-            ctx.font = this.size + 'px Inter, sans-serif';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(this.char, 0, 0);
-            ctx.restore();
-            ctx.globalAlpha = 1;
-            return;
-        }
+        // Her yıldız için hedef konumları hesapla ve panel boyutlarını belirle
+        allCompletedWordStars.forEach((wordStars, wordIdx) => {
+            // Uzunluk değişebileceğinden mevcut harflerden kelimeyi yeniden oluştur
+            let currentWordString = wordStars.map(s => s.char).join('');
+            let wordWidth = ctx.measureText(currentWordString).width;
 
-        // Current normal star drawing logic
-        let lev = this.fixed ? Math.sin(Date.now()/500 + this.x)*1.5 : 0; // Slight ripple effect for fixed letters
-        ctx.translate(this.x, this.y + lev); // this.x, this.y set by update function
-        if (!this.fixed) ctx.rotate(this.angle); // Rotate if not fixed
-        if (this.fixed) { // Style for fixed letters (part of a word)
-          ctx.save();
-          ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Semi-transparent black background
-          ctx.roundRect(-this.size*0.45, -this.size*0.45, this.size*0.9, this.size*0.9, this.size*0.25);
-          ctx.fill();
-          ctx.restore();
-          ctx.fillStyle = 'white'; // Beyaz harf
-          ctx.shadowColor = 'white'; ctx.shadowBlur = 3; // Slight glow
-        } else { // Style for freely floating letters
-          ctx.globalAlpha = this.alpha; // Apply transparency
-          ctx.fillStyle = 'white'; ctx.shadowColor = 'white'; ctx.shadowBlur = 4; // White letter with stronger glow
-        }
-        ctx.font = (held===this ? this.size*2 : this.size) + 'px Inter, sans-serif'; // Larger if held
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(this.char, 0, 0); // Draw letter
-        ctx.restore();
-        ctx.globalAlpha = 1; // Reset transparency
-      }
-    }
+            const horizontalPadding = 30; // Ekran kenarından minimum boşluk
 
-    // Function to transform selected words into hearts and scatter them (ÇOK and Dynamic Word)
-    function transformSelectedWordsToHeartsAndScatter() {
-        const shapes = ['❤︎','♡']; // Heart shapes
-        let delay = 0;
+            let effectiveWordStartX = (canvas.width - wordWidth) / 2; // Ortalamaya çalış
 
-        // 2nd index ('ÇOK') and 3rd index (dynamic word) in allCompletedWordStars array
-        const wordsToTransform = [allCompletedWordStars[2], allCompletedWordStars[3]];
+            // Kelime sağa taşıyorsa, sola kaydır
+            if (effectiveWordStartX + wordWidth > canvas.width - horizontalPadding) {
+                effectiveWordStartX = canvas.width - wordWidth - horizontalPadding;
+            }
 
-        wordsToTransform.forEach(wordStars => {
-            if (!wordStars) return; // Safety check if word doesn't exist
-
-            wordStars.forEach(star => {
-                setTimeout(() => {
-                    star.char = shapes[Math.floor(Math.random()*shapes.length)]; // Transform letter to heart
-                    // Emit particles from the transformed heart
-                    for (let i = 0; i < 8; i++) {
-                        let ang = Math.random()*Math.PI*2;
-                        let spd = 1 + Math.random();
-                        particles.push(new Particle(star.x, star.y, Math.cos(ang)*spd, Math.sin(ang)*spd));
-                    }
-                    star.isFinalDisplayStar = false; // No longer part of the fixed central display
-                    star.fixed = false; // Allow it to move
-                    star.isScatteredHeart = true; // Mark as scattered and fading heart
-                    star.vx = (Math.random() - 0.5) * 5; // Initial scatter velocity
-                    star.vy = (Math.random() - 0.5) * 5;
-                    star.alpha = 1; // Start with full opacity
-                    star.size = 40; // Maintain large size for hearts
-                }, delay);
-                delay += 100; // Small delay between letters
-            });
-            delay += 500; // Larger delay between words
-        });
-    }
-
-    // Function to remove "'A" characters at the end of "PINAR'A" word
-    function removePinarATail() {
-        // 1st index ("PINAR'A") in allCompletedWordStars array
-        const pinarStars = allCompletedWordStars[1];
-        if (pinarStars && pinarStars.length >= 2) {
-            const starApostrophe = pinarStars[pinarStars.length - 2];
-            const starA = pinarStars[pinarStars.length - 1];
-
-            // Empty characters and set alpha to 0
-            starApostrophe.char = '';
-            starApostrophe.alpha = 0;
-            starA.char = '';
-            starA.alpha = 0;
-        }
-    }
-
-    // Function to transform background stars into hearts and scatter them
-    function transformBackgroundStarsToHeartsAndScatter() {
-        const shapes = ['❤︎','♡'];
-        let delay = 0;
-
-        // Filter all stars that are not finalDisplayStar or ScatteredHeart
-        stars.filter(star => !star.isFinalDisplayStar && !star.isScatteredHeart).forEach(star => {
-            setTimeout(() => {
-                star.char = shapes[Math.floor(Math.random()*shapes.length)]; // Transform letter to heart
-                // Emit particles from the transformed heart
-                for (let i = 0; i < 8; i++) {
-                    let ang = Math.random()*Math.PI*2;
-                    let spd = 1 + Math.random();
-                    particles.push(new Particle(star.x, star.y, Math.cos(ang)*spd, Math.sin(ang)*spd));
-                }
-                star.fixed = false; // Allow movement if fixed
-                star.isScatteredHeart = true; // Mark as scattered and fading heart
-                star.alpha = 1; // Start with full opacity
-                star.vx = (Math.random() - 0.5) * 3; // Initial scatter velocity (slightly less)
-                star.vy = (Math.random() - 0.5) * 3;
-                star.size = 20 + Math.random() * 10; // Give a reasonable size
-            }, delay);
-            delay += 50; // Gradual delay between background star transformations
-        });
-    }
-
-    // New function to initiate the final word display animation
-    function initiateFinalWordDisplayAnimation() {
-        finalDisplayAnimationRunning = true;
-        finalDisplayAnimationStartTime = Date.now();
-        const animationDuration = 10000; // Animation duration: 10 seconds
-
-        const totalWords = allCompletedWordStars.length; // Should be 4 words in total
-        const lineHeight = 50; // Vertical spacing for each word line
-        const totalDisplayHeight = totalWords * lineHeight;
-        const startY = (canvas.height - totalDisplayHeight) / 2; // Starting Y position for the first word
-
-        let minPanelX = canvas.width;
-        let maxPanelX = 0;
-        let minPanelY = canvas.height;
-        let maxPanelY = 0;
-
-        ctx.font = `${FIXED_LETTER_SIZE}px Inter, sans-serif`; // Use correct font for panel size calculation
-
-        // Calculate target positions for each star and determine panel dimensions
-        allCompletedWordStars.forEach((wordStars, wordIdx) => {
-            // Reconstruct word from current letters as length might change
-            let currentWordString = wordStars.map(s => s.char).join('');
-            let wordWidth = ctx.measureText(currentWordString).width;
-
-            const horizontalPadding = 30; // Minimum padding from screen edge
-
-            let effectiveWordStartX = (canvas.width - wordWidth) / 2; // Attempt to center
-
-            // If word overflows to the right, shift left
-            if (effectiveWordStartX + wordWidth > canvas.width - horizontalPadding) {
-                effectiveWordStartX = canvas.width - wordWidth - horizontalPadding;
-            }
-
-            // If word overflows to the left (even after previous adjustment), shift right (maintain minimum padding)
-            effectiveWordStartX = Math.max(effectiveWordStartX, horizontalPadding);
+            // Kelime sola taşıyorsa (önceki ayarlamadan sonra bile), sağa kaydır (minimum boşluğu koru)
+            effectiveWordStartX = Math.max(effectiveWordStartX, horizontalPadding);
 
 
-            wordStars.forEach((star, letterIdx) => {
-                star.originalX = star.x; // Store current position as animation start
-                star.originalY = star.y;
-                star.isFinalDisplayStar = true; // Mark as part of final display
+            wordStars.forEach((star, letterIdx) => {
+                star.originalX = star.x; // Mevcut konumu animasyon başlangıcı olarak sakla
+                star.originalY = star.y;
+                star.isFinalDisplayStar = true; // Son gösterimin bir parçası olarak işaretle
 
-                // Calculate target X position for each letter within the word
-                let accumulatedLetterWidth = 0;
-                for(let i = 0; i < letterIdx; i++) {
-                    // Sum width of only visible characters
-                    const prevStar = wordStars[i];
-                    if (prevStar.char !== '') {
-                        accumulatedLetterWidth += ctx.measureText(prevStar.char).width;
-                    }
-                }
-                star.targetX = effectiveWordStartX + accumulatedLetterWidth + ctx.measureText(star.char).width / 2;
+                // Kelime içindeki her harf için hedef X konumunu hesapla
+                let accumulatedLetterWidth = 0;
+                for(let i = 0; i < letterIdx; i++) {
+                    // Yalnızca görünür karakterlerin genişliğini topla
+                    const prevStar = wordStars[i];
+                    if (prevStar.char !== '') {
+                        accumulatedLetterWidth += ctx.measureText(prevStar.char).width;
+                    }
+                }
+                star.targetX = effectiveWordStartX + accumulatedLetterWidth + ctx.measureText(star.char).width / 2;
 
-                star.targetY = startY + wordIdx * lineHeight + (lineHeight / 2); // Vertically center on its line
+                star.targetY = startY + wordIdx * lineHeight + (lineHeight / 2); // Kendi satırında dikey olarak ortala
 
-                // Update panel dimensions
-                if (star.char !== '') { // Only consider visible letters
-                    minPanelX = Math.min(minPanelX, star.targetX - ctx.measureText(star.char).width / 2);
-                    maxPanelX = Math.max(maxPanelX, star.targetX + ctx.measureText(star.char).width / 2);
-                }
-                minPanelY = Math.min(minPanelY, star.targetY - lineHeight / 2);
-                maxPanelY = Math.max(maxPanelY, star.targetY + lineHeight / 2);
-            });
-        });
+                // Panel boyutlarını güncelle
+                if (star.char !== '') { // Yalnızca görünür harfleri dikkate al
+                    minPanelX = Math.min(minPanelX, star.targetX - ctx.measureText(star.char).width / 2);
+                    maxPanelX = Math.max(maxPanelX, star.targetX + ctx.measureText(star.char).width / 2);
+                }
+                minPanelY = Math.min(minPanelY, star.targetY - lineHeight / 2);
+                maxPanelY = Math.max(maxPanelY, star.targetY + lineHeight / 2);
+            });
+        });
 
-        // Add padding for panel dimensions
-        const paddingX = 60; // Horizontal padding
-        const paddingY = 40; // Vertical padding
+        // Panel boyutları için boşluk ekle
+        const paddingX = 60; // Yatay boşluk
+        const paddingY = 40; // Dikey boşluk
 
-        panelRect.x = minPanelX - paddingX / 2;
-        panelRect.y = minPanelY - paddingY / 2;
-        panelRect.width = (maxPanelX - minPanelX) + paddingX;
-        panelRect.height = (maxPanelY - minPanelY) + paddingY;
+        panelRect.x = minPanelX - paddingX / 2;
+        panelRect.y = minPanelY - paddingY / 2;
+        panelRect.width = (maxPanelX - minPanelX) + paddingX;
+        panelRect.height = (maxPanelY - minPanelY) + paddingY;
 
-        // Ensure panelRect stays within canvas bounds
+        // panelRect'in canvas sınırları içinde kalmasını sağla
         panelRect.x = Math.max(0, panelRect.x);
         panelRect.y = Math.max(0, panelRect.y);
         if (panelRect.x + panelRect.width > canvas.width) {
@@ -449,510 +656,568 @@
             panelRect.height = canvas.height - panelRect.y;
         }
 
-        // Schedule end of animation and transition to static display + transformation
-        setTimeout(() => {
-            finalDisplayAnimationRunning = false;
-            finalDisplayActive = true; // Words are now permanently fixed in the center
+        // Animasyonun sonunu ve statik gösterime geçişi + dönüşümü planla
+        setTimeout(() => {
+            finalDisplayAnimationRunning = false;
+            finalDisplayActive = true; // Kelimeler artık merkeze kalıcı olarak sabitlendi
 
-            // Apply transformations for words (ÇOK, dynamic) and PINAR'A
-            transformSelectedWordsToHeartsAndScatter();
-            removePinarATail();
+            // Kelimeler için dönüşümleri uygula (ÇOK, dinamik) ve PINAR'A
+            transformSelectedWordsToHeartsAndScatter();
+            removePinarATail();
 
-            // Start background stars transformation shortly after word transformations begin
-            setTimeout(() => {
-                transformBackgroundStarsToHeartsAndScatter();
-            }, 1500); // Wait 1.5 seconds after word transformations start
-        }, animationDuration);
-    }
+            // Kelime dönüşümleri başladıktan kısa bir süre sonra arka plan yıldızlarının dönüşümünü başlat
+            setTimeout(() => {
+                transformBackgroundStarsToHeartsAndScatter();
+            }, 1500); // Kelime dönüşümleri başladıktan 1.5 saniye bekle
+        }, animationDuration);
+    }
 
-    // Boomerang throw function (only animates and physically fixes the star)
-    function bumerangFırlat(star, onCompleteCallback) {
-      const sx = star.x, sy = star.y;
-      const mdx = mouse.mx, mdy = mouse.my;
-      const speed = Math.hypot(mdx, mdy);
-      const ang = Math.atan2(mdy, mdx);
-      const dist = Math.min(200 + speed*15, 800);
-      const ox = sx + Math.cos(ang)*dist, oy = sy + Math.sin(ang)*dist;
+    // Bumerang fırlatma fonksiyonu (yalnızca yıldızı canlandırır ve fiziksel olarak sabitler)
+    function bumerangFırlat(star, onCompleteCallback) {
+      star.isAnimatingThrow = true; // Animasyon başladığında bayrağı true yap
+      const sx = star.x, sy = star.y;
+      const mdx = mouse.mx, mdy = mouse.my;
+      const speed = Math.hypot(mdx, mdy);
+      const ang = Math.atan2(mdy, mdx);
+      const dist = Math.min(200 + speed*15, 800);
+      const ox = sx + Math.cos(ang)*dist, oy = sy + Math.sin(ang)*dist;
 
-      let tx, ty;
-      if (fixedLetters.length === 0) { tx = ox; ty = oy; }
-      else { let last = fixedLetters[fixedLetters.length - 1]; tx = last.x + 36; ty = last.y; }
+      let tx, ty;
+      if (fixedLetters.length === 0) { tx = ox; ty = oy; }
+      else { let last = fixedLetters[fixedLetters.length - 1]; tx = last.x + 36; ty = last.y; }
 
-      const fd = Math.hypot(ox - sx, oy - sy);
-      const bd = Math.hypot(tx - ox, ty - oy);
-      const tot = fd + bd;
-      const dur = 4500;
-      const ft = fd / tot * dur;
-      const bt = dur - ft;
-      const mx1 = (sx + ox) / 2 + 60, my1 = (sy + oy) / 2 - 60;
-      const mx2 = (ox + tx) / 2 + 60, my2 = (oy + ty) / 2 - 60;
-      const start = Date.now(), ia = star.angle;
+      const fd = Math.hypot(ox - sx, oy - sy);
+      const bd = Math.hypot(tx - ox, ty - oy);
+      const tot = fd + bd;
+      const dur = 4500;
+      const ft = fd / tot * dur;
+      const bt = dur - ft;
+      const mx1 = (sx + ox) / 2 + 60, my1 = (sy + oy) / 2 - 60;
+      const mx2 = (ox + tx) / 2 + 60, my2 = (oy + ty) / 2 - 60;
+      const start = Date.now(), ia = star.angle;
 
-      function step() {
-        let e = Date.now() - start;
-        if (e > dur) e = dur;
-        const t = e / dur;
-        star.angle = ia * (1 - t);
+      function step() {
+        let e = Date.now() - start;
+        if (e > dur) e = dur;
+        const t = e / dur;
+        star.angle = ia * (1 - t);
 
-        let cx, cy;
-        if (e <= ft) {
-          const p = e / ft;
-          const a = (1 - p) ** 2, b = 2 * (1 - p) * p, c = p ** 2;
-          cx = a * sx + b * mx1 + c * ox;
-          cy = a * sy + b * my1 + c * oy;
-        } else {
-          const p = (e - ft) / bt;
-          const a = (1 - p) ** 2, b = 2 * (1 - p) * p, c = p ** 2;
-          cx = a * ox + b * mx2 + c * tx;
-          cy = a * oy + b * my2 + c * ty;
-        }
-        star.x = cx; star.y = cy;
-        star.size = star.baseSize + (FIXED_LETTER_SIZE - star.baseSize) * t;
+        let cx, cy;
+        if (e <= ft) {
+          const p = e / ft;
+          const a = (1 - p) ** 2, b = 2 * (1 - p) * p, c = p ** 2;
+          cx = a * sx + b * mx1 + c * ox;
+          cy = a * sy + b * my1 + c * oy;
+        } else {
+          const p = (e - ft) / bt;
+          const a = (1 - p) ** 2, b = 2 * (1 - p) * p, c = p ** 2;
+          cx = a * ox + b * mx2 + c * tx;
+          cy = a * oy + b * my2 + c * ty;
+        }
+        star.x = cx; star.y = cy;
+        star.size = star.baseSize + (FIXED_LETTER_SIZE - star.baseSize) * t;
 
-        if (e < dur) {
-          requestAnimationFrame(step);
-        } else {
-          star.x = tx; star.y = ty;
-          star.size = FIXED_LETTER_SIZE;
-          star.fixed = true;
-          star.wordIndex = wordIndex;
+        if (e < dur) {
+          requestAnimationFrame(step);
+        } else {
+          star.x = tx; star.y = ty;
+          star.size = FIXED_LETTER_SIZE;
+          star.wordIndex = wordIndex;
+          star.isAnimatingThrow = false; // Animasyon bittiğinde bayrağı false yap
 
-          if (onCompleteCallback) {
-            onCompleteCallback(star);
-          }
-        }
-      }
-      step();
-    }
+          if (onCompleteCallback) {
+            onCompleteCallback(star);
+          }
+        }
+      }
+      step();
+    }
 
-    // Recalculates and applies target positions for all fixed letters
-    function recalculateFixedLetterPositions() {
-      const letterPadding = 36;
-      ctx.font = `${FIXED_LETTER_SIZE}px Inter, sans-serif`; // Set correct font for text measurements
+    // Tüm sabitlenmiş harfler için hedef konumları yeniden hesaplar ve uygular
+    function recalculateFixedLetterPositions() {
+      const letterPadding = 36;
+      ctx.font = `${FIXED_LETTER_SIZE}px Inter, sans-serif`; // Metin ölçümleri için doğru yazı tipini ayarla
 
-      let totalCurrentWordWidth = 0;
-      for (let i = 0; i < fixedLetters.length; i++) {
-          totalCurrentWordWidth += ctx.measureText(fixedLetters[i].char).width;
-          if (i < fixedLetters.length - 1) {
-              totalCurrentWordWidth += letterPadding;
-          }
-      }
+      let totalCurrentWordWidth = 0;
+      for (let i = 0; i < fixedLetters.length; i++) {
+          totalCurrentWordWidth += ctx.measureText(fixedLetters[i].char).width;
+          if (i < fixedLetters.length - 1) {
+              totalCurrentWordWidth += letterPadding;
+          }
+      }
 
-      const minScreenPadding = 30; // Minimum horizontal padding from screen edges
-      const verticalWordSpacing = 60; // Spacing between different completed words (vertical)
-      const fixedLetterHeight = FIXED_LETTER_SIZE; // Approx height of fixed letter for vertical spacing
+      const minScreenPadding = 30; // Ekran kenarlarından minimum yatay boşluk
+      const verticalWordSpacing = 60; // Farklı tamamlanmış kelimeler arasındaki boşluk (dikey)
+      const fixedLetterHeight = FIXED_LETTER_SIZE; // Sabitlenmiş harfin yaklaşık yüksekliği (dikey boşluk için)
 
-      let currentWordBlockY;
-      if (fixedLetters.length === 1) {
-          // If this is the first letter, use its current Y (which would be its landing spot)
-          currentWordBlockY = fixedLetters[0].y;
-      } else {
-          // For subsequent letters, derive word's Y from the first fixed letter's target Y or current Y
-          currentWordBlockY = fixedLetters[0].targetFixedY !== null ? fixedLetters[0].targetFixedY : fixedLetters[0].y;
-      }
+      let currentWordBlockY;
+      if (fixedLetters.length === 1) {
+          // Eğer bu ilk harf ise, mevcut Y konumunu kullan (iniş noktası olacaktır)
+          currentWordBlockY = fixedLetters[0].y;
+      } else {
+          // Sonraki harfler için, kelimenin Y konumunu ilk sabitlenmiş harfin hedef Y'sinden veya mevcut Y'sinden türet
+          currentWordBlockY = fixedLetters[0].targetFixedY !== null ? fixedLetters[0].targetFixedY : fixedLetters[0].y;
+      }
 
-      for (const completedWordStars of allCompletedWordStars) {
-          if (completedWordStars.length > 0) {
-              const completedWordFirstStar = completedWordStars[0];
-              const completedWordCenterY = completedWordFirstStar.targetFixedY !== null ? completedWordFirstStar.targetFixedY : completedWordFirstStar.y;
+      for (const completedWordStars of allCompletedWordStars) {
+          if (completedWordStars.length > 0) {
+              const completedWordFirstStar = completedWordStars[0];
+              const completedWordCenterY = completedWordFirstStar.targetFixedY !== null ? completedWordFirstStar.targetFixedY : completedWordFirstStar.y;
 
-              const completedWordTop = completedWordCenterY - (fixedLetterHeight / 2);
-              const completedWordBottom = completedWordCenterY + (fixedLetterHeight / 2);
+              const completedWordTop = completedWordCenterY - (fixedLetterHeight / 2);
+              const completedWordBottom = completedWordCenterY + (fixedLetterHeight / 2);
 
-              const currentWordTop = currentWordBlockY - (fixedLetterHeight / 2);
-              const currentWordBottom = currentWordBlockY + (fixedLetterHeight / 2);
+              const currentWordTop = currentWordBlockY - (fixedLetterHeight / 2);
+              const currentWordBottom = currentWordBlockY + (fixedLetterHeight / 2);
 
-              if (currentWordTop < completedWordBottom && currentWordBottom > completedWordTop) {
-                  currentWordBlockY = completedWordBottom + (fixedLetterHeight / 2) + verticalWordSpacing;
-              }
-          }
-      }
+              if (currentWordTop < completedWordBottom && currentWordBottom > completedWordTop) {
+                  currentWordBlockY = completedWordBottom + (fixedLetterHeight / 2) + verticalWordSpacing;
+              }
+          }
+      }
 
-      currentWordBlockY = Math.max(minScreenPadding + fixedLetterHeight / 2, currentWordBlockY);
-      currentWordBlockY = Math.min(canvas.height - minScreenPadding - fixedLetterHeight / 2, currentWordBlockY);
+      currentWordBlockY = Math.max(minScreenPadding + fixedLetterHeight / 2, currentWordBlockY);
+      currentWordBlockY = Math.min(canvas.height - minScreenPadding - fixedLetterHeight / 2, currentWordBlockY);
 
-      let currentWordBlockStartX;
-      if (fixedLetters.length === 1) {
-          currentWordBlockStartX = fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
-      } else {
-          currentWordBlockStartX = fixedLetters[0].targetFixedX !== null ? fixedLetters[0].targetFixedX - (ctx.measureText(fixedLetters[0].char).width / 2) : fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
-      }
+      let currentWordBlockStartX;
+      if (fixedLetters.length === 1) {
+          currentWordBlockStartX = fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
+      } else {
+          currentWordBlockStartX = fixedLetters[0].targetFixedX !== null ? fixedLetters[0].targetFixedX - (ctx.measureText(fixedLetters[0].char).width / 2) : fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
+      }
 
-      if (currentWordBlockStartX + totalCurrentWordWidth > canvas.width - minScreenPadding) {
-          currentWordBlockStartX = canvas.width - totalCurrentWordWidth - minScreenPadding;
-      }
-      currentWordBlockStartX = Math.max(minScreenPadding, currentWordBlockStartX);
+      if (currentWordBlockStartX + totalCurrentWordWidth > canvas.width - minScreenPadding) {
+          currentWordBlockStartX = canvas.width - totalCurrentWordWidth - minScreenPadding;
+      }
+      currentWordBlockStartX = Math.max(minScreenPadding, currentWordBlockStartX);
 
-      let currentPlacementWidth = 0;
-      for (let i = 0; i < fixedLetters.length; i++) {
-          const fLetter = fixedLetters[i];
-          const charWidth = ctx.measureText(fLetter.char).width;
-          fLetter.targetFixedX = currentWordBlockStartX + currentPlacementWidth + (charWidth / 2);
-          fLetter.targetFixedY = currentWordBlockY;
-          currentPlacementWidth += charWidth;
-          if (i < fixedLetters.length - 1) {
-              currentPlacementWidth += letterPadding;
-          }
-      }
-    }
+      let currentPlacementWidth = 0;
+      for (let i = 0; i < fixedLetters.length; i++) {
+          const fLetter = fixedLetters[i];
+          const charWidth = ctx.measureText(fLetter.char).width;
+          fLetter.targetFixedX = currentWordBlockStartX + currentPlacementWidth + (charWidth / 2);
+          fLetter.targetFixedY = currentWordBlockY;
+          currentPlacementWidth += charWidth;
+          if (i < fixedLetters.length - 1) {
+              currentPlacementWidth += letterPadding;
+          }
+      }
+    }
 
-    // Checks if the current word is completed and moves to the next stage
-    function checkWordCompletion() {
-      let wordCompleted = false;
+    // Mevcut kelimenin tamamlanıp tamamlanmadığını kontrol eder ve bir sonraki aşamaya geçer
+    function checkWordCompletion() {
+      let wordCompleted = false;
 
-      if (currentWord === 'ÇOK') {
-          // 'ÇOK' is complete when 'K' is placed, which means currentIndex becomes 2.
-          if (currentIndex === 2) {
-              wordCompleted = true;
-          }
-      } else if (currentWord && !dynamicMode) { // For ALTAY, PINAR'A, and the chosen dynamic word (not in selection phase)
-          if (currentIndex >= currentWord.length) {
-              wordCompleted = true;
-          }
-      }
+      if (currentWord === 'ÇOK') {
+          // 'ÇOK' tamamlandığında 'K' yerleştirilir, bu da currentIndex'in 2 olması anlamına gelir.
+          if (currentIndex === 2) {
+              wordCompleted = true;
+          }
+      } else if (currentWord && !dynamicMode) { // ALTAY, PINAR'A ve seçilen dinamik kelime için (seçim aşamasında değil)
+          if (currentIndex >= currentWord.length) {
+              wordCompleted = true;
+          }
+      }
 
-      if (wordCompleted) {
-          allCompletedWordStars.push([...fixedLetters]);
-          fixedLetters = []; // Clear letters for next word
+      if (wordCompleted) {
+          allCompletedWordStars.push([...fixedLetters]);
+          fixedLetters = []; // Bir sonraki kelime için harfleri temizle
 
-          if (currentWord === 'ÇOK') { // Transition from 'ÇOK' to dynamic word selection
-              dynamicMode = true;
-              currentWord = ''; // Clear currentWord to signal dynamic selection phase
-              currentIndex = 0; // Reset for first char selection of dynamic word
-              secondPhase = false;
-          } else if (wordIndex < wordList.length - 1) { // Move to next predefined word
-              wordIndex++;
-              currentWord = wordList[wordIndex];
-              currentIndex = 0;
-          } else { // All words (predefined + dynamic) are done
-              initiateFinalWordDisplayAnimation();
-          }
-      }
-    }
+          if (currentWord === 'ÇOK') { // 'ÇOK'tan dinamik kelime seçimine geçiş
+              dynamicMode = true;
+              currentWord = ''; // Dinamik seçim aşamasını işaret etmek için currentWord'ü temizle
+              currentIndex = 0; // Dinamik kelimenin ilk karakter seçimi için sıfırla
+              secondPhase = false;
+          } else if (wordIndex < wordList.length - 1) { // Bir sonraki önceden tanımlanmış kelimeye geç
+              wordIndex++;
+              currentWord = wordList[wordIndex];
+              currentIndex = 0;
+          } else { // Tüm kelimeler (önceden tanımlanmış + dinamik) tamamlandı
+              initiateFinalWordDisplayAnimation();
+          }
+      }
+    }
 
-    // Function to reset the game
-    function reset() {
-      stars=[];
-      for(let i=0;i<120;i++) stars.push(new Star());
-      particles=[];
-      fixedLetters=[];
-      wordIndex=0; currentWord=wordList[0]; currentIndex=0;
-      dynamicMode=false; secondPhase=false;
-      // Reset new global variables
-      allCompletedWordStars = [];
-      finalDisplayAnimationRunning = false;
-      finalDisplayAnimationStartTime = 0;
-      finalDisplayActive = false;
-      panelRect = { x: 0, y: 0, width: 0, height: 0 }; // Reset panel
-    }
-    reset(); // Start game on load
+    // Patlayan kalp grubu oluşturma fonksiyonu
+    function createExplodingHeartGroup() {
+      const numHearts = 2 + Math.floor(Math.random() * 2); // 2 veya 3 kalp
+      const startX = Math.random() * canvas.width;
+      const startY = Math.random() * canvas.height;
+      const heartShapes = ['❤︎', '♡'];
 
-    // Helper function to update mouse/touch event coordinates
-    function updateMouseCoordinates(clientX, clientY) {
-      mouse.px = mouse.x;
-      mouse.py = mouse.y;
-      mouse.x = clientX;
-      mouse.y = clientY;
-      lastMove = Date.now();
-      mouse.mx = mouse.x - mouse.px;
-      mouse.my = mouse.y - mouse.py;
+      for (let i = 0; i < numHearts; i++) {
+        const heart = new Star(heartShapes[Math.floor(Math.random() * heartShapes.length)]);
+        heart.x = startX + (Math.random() - 0.5) * 20; // Hafifçe ofset
+        heart.y = startY + (Math.random() - 0.5) * 20;
+        heart.fixed = false;
+        heart.isScatteredHeart = true; // Dağılmasını ve kaybolmasını sağla
+        heart.alpha = 1;
+        heart.size = 20 + Math.random() * 15; // Değişen boyut
+        heart.vx = (Math.random() - 0.5) * 4; // Başlangıç dışa doğru hız
+        heart.vy = (Math.random() - 0.5) * 4;
+        stars.push(heart); // Ana yıldızlar dizisine ekle (güncellenmek ve çizilmek üzere)
+      }
+    }
 
-      const dx = mouse.px - mouse.x;
-      const dy = mouse.py - mouse.y;
-      const m = Math.hypot(dx, dy);
-      if (m > 1) {
-        for (let i = 0; i < 3; i++) {
-          particles.push(new Particle(
-            mouse.x, mouse.y,
-            dx * 0.02 + (Math.random() - 0.5) * 0.5,
-            dy * 0.02 + (Math.random() - 0.5) * 1
-          ));
-        }
-      }
-    }
+    // Oyunu sıfırlama fonksiyonu
+    function reset() {
+      stars=[];
+      for(let i=0;i<120;i++) stars.push(new Star()); // Normal yıldızlar
 
-    // Mouse Event Listeners
-    window.addEventListener('mousemove', e => {
-      updateMouseCoordinates(e.clientX, e.clientY);
-    });
+      // Arka plan noktalarını başlat
+      backgroundDots = [];
+      for(let i=0; i<500; i++) { // Daha fazla yoğunluk için 500 arka plan noktası oluştur
+        const dot = new Star('•'); // '•' karakteriyle yeni bir Star oluştur
+        backgroundDots.push(dot);
+      }
 
-    window.addEventListener('mousedown', ()=>{
-      for(let s of stars) {
-        const dx = s.x - mouse.x;
-        const dy = s.y - mouse.y;
-        // Only allow holding non-fixed stars
-        if (Math.hypot(dx, dy) < 20 && !s.fixed) {
-          held = s;
-          break;
-        }
-      }
-    });
+      particles=[];
+      shootingStars=[]; // Kayan yıldızları temizle
+      fixedLetters=[];
+      wordIndex=0; currentWord=wordList[0]; currentIndex=0;
+      dynamicMode=false; secondPhase=false;
+      // Yeni global değişkenleri sıfırla
+      allCompletedWordStars = [];
+      finalDisplayAnimationRunning = false;
+      finalDisplayAnimationStartTime = 0;
+      finalDisplayActive = false;
+      panelRect = { x: 0, y: 0, width: 0, height: 0 }; // Paneli sıfırla
+    }
+    reset(); // Yüklemede oyunu başlat
 
-    window.addEventListener('mouseup', ()=>{
-      if (!held) return;
+    // Fare/dokunmatik olay koordinatlarını güncellemek için yardımcı fonksiyon
+    function updateMouseCoordinates(clientX, clientY) {
+      mouse.px = mouse.x;
+      mouse.py = mouse.y;
+      mouse.x = clientX;
+      mouse.y = clientY;
+      lastMove = Date.now();
+      mouse.mx = mouse.x - mouse.px;
+      mouse.my = mouse.y - mouse.py;
 
-      // Prevent interaction if words are in final static display or during animation
-      if (finalDisplayActive || finalDisplayAnimationRunning) {
-          held = null;
-          return;
-      }
+      const dx = mouse.px - mouse.x;
+      const dy = mouse.py - mouse.y;
+      const m = Math.hypot(dx, dy);
+      if (m > 1) {
+        for (let i = 0; i < 3; i++) {
+          particles.push(new Particle(
+            mouse.x, mouse.y,
+            dx * 0.02 + (Math.random() - 0.5) * 0.5,
+            dy * 0.02 + (Math.random() - 0.5) * 1
+          ));
+        }
+      }
+    }
 
-      const charThrown = held.char;
-      const thrownStar = held;
-      
-      if (dynamicMode) {
-        if (!secondPhase) { // Selecting first letter of dynamic word
-          options = wordGroups[charThrown] || [];
-          if (options.length > 0) {
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star); // Add to fixedLetters
-                if (options.length > 1) {
-                    secondPhase = true;
-                    currentIndex = 1; // First char of dynamic word picked
-                } else {
-                    currentWord = options[0];
-                    dynamicMode = false;
-                    currentIndex = 1; // First char of actual dynamic word (e.g., AŞIK)
-                }
-                recalculateFixedLetterPositions(); // Recalculate positions after adding
-                checkWordCompletion(); // Check completion after adding
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Release if not valid
-            thrownStar.fixed = false; // Ensure it's not fixed
-          }
-        } else { // secondPhase
-          const match = options.find(w => w[1] === charThrown);
-          if (match) {
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star); // Add to fixedLetters
-                currentWord = match;
-                secondPhase = false;
-                dynamicMode = false;
-                currentIndex = 2; // Second char of actual dynamic word
-                recalculateFixedLetterPositions(); // Recalculate positions after adding
-                checkWordCompletion(); // Check completion after adding
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Release if not valid
-            thrownStar.fixed = false; // Ensure it's not fixed
-          }
-        }
-      } else { // Predefined words (ALTAY, PINAR'A, ÇOK)
-        let shouldAccept = false;
-        let shouldIncrement = false;
+    // Fare Olay Dinleyicileri
+    window.addEventListener('mousemove', e => {
+      updateMouseCoordinates(e.clientX, e.clientY);
+    });
 
-        const expectedCharForCurrentIndex = currentWord[currentIndex];
+    window.addEventListener('mousedown', ()=>{
+      for(let s of stars) {
+        const dx = s.x - mouse.x;
+        const dy = s.y - mouse.y;
+        // Yalnızca sabitlenmemiş ve animasyon yapmayan yıldızları tutmaya izin ver
+        if (Math.hypot(dx, dy) < 20 && !s.fixed && !s.isAnimatingThrow) {
+          held = s;
+          break;
+        }
+      }
+    });
 
-        if (currentWord === 'ÇOK') {
-            if (currentIndex === 0 && charThrown === 'Ç') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            } else if (currentIndex === 1 && charThrown === 'O') {
-                shouldAccept = true;
-                shouldIncrement = false; // Don't increment index for multiple 'O's
-            } else if (currentIndex === 1 && charThrown === 'K') {
-                shouldAccept = true;
-                shouldIncrement = true; // Increment index for 'K'
-            }
-        } else { // For ALTAY, PINAR'A
-            if (charThrown === expectedCharForCurrentIndex) {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        }
+    window.addEventListener('mouseup', ()=>{
+      if (!held) return;
 
-        if (shouldAccept) {
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star);
-                if (shouldIncrement) {
-                    currentIndex++;
-                }
-                recalculateFixedLetterPositions(); // Recalculate positions after adding
-                checkWordCompletion(); // Check completion after adding
-            });
-        } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-        }
-      }
-      held = null; // Ensure held is always null after mouseup
-    });
+      // Kelimeler son statik gösterimde veya animasyon sırasında etkileşimi engelle
+      if (finalDisplayActive || finalDisplayAnimationRunning) {
+          held = null;
+          return;
+      }
 
-    // Dokunmatik Olay Dinleyicileri (Eklenenler)
-    window.addEventListener('touchstart', e => {
-      e.preventDefault(); // Varsayılan dokunma davranışını (kaydırma, yakınlaştırma) engelle
-      if (e.touches.length > 0) {
-        updateMouseCoordinates(e.touches[0].clientX, e.touches[0].clientY);
-        for(let s of stars) {
-          const dx = s.x - mouse.x;
-          const dy = s.y - mouse.y;
-          // Only allow holding non-fixed stars
-          if (Math.hypot(dx, dy) < 40 && !s.fixed) { // Slightly larger area for touch
-            held = s;
-            break;
-          }
-        }
-      }
-    });
+      const charThrown = held.char;
+      const thrownStar = held;
+      
+      if (dynamicMode) {
+        if (!secondPhase) { // Dinamik kelimenin ilk harfini seçme
+          options = wordGroups[charThrown] || [];
+          if (options.length > 0) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => { // Animasyondan sonraki geri çağırma
+                fixedLetters.push(star); // fixedLetters'a ekle
+                if (options.length > 1) {
+                    secondPhase = true;
+                    currentIndex = 1; // Dinamik kelimenin ilk karakteri seçildi
+                } else {
+                    currentWord = options[0];
+                    dynamicMode = false;
+                    currentIndex = 1; // Gerçek dinamik kelimenin ilk karakteri (örn. AŞIK)
+                }
+                recalculateFixedLetterPositions(); // Eklendikten sonra konumları yeniden hesapla
+                checkWordCompletion(); // Eklendikten sonra tamamlanmayı kontrol et
+            });
+          } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Geçerli değilse serbest bırak
+            thrownStar.fixed = false; // Sabitlenmediğinden emin ol
+          }
+        } else { // secondPhase
+          const match = options.find(w => w[1] === charThrown);
+          if (match) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => { // Animasyondan sonraki geri çağırma
+                fixedLetters.push(star); // fixedLetters'a ekle
+                currentWord = match;
+                secondPhase = false;
+                dynamicMode = false;
+                currentIndex = 2; // Gerçek dinamik kelimenin ikinci karakteri
+                recalculateFixedLetterPositions(); // Eklendikten sonra konumları yeniden hesapla
+                checkWordCompletion(); // Eklendikten sonra tamamlanmayı kontrol et
+            });
+          } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Geçerli değilse serbest bırak
+            thrownStar.fixed = false; // Sabitlenmediğinden emin ol
+          }
+        }
+      } else { // Önceden tanımlanmış kelimeler (ALTAY, PINAR'A, ÇOK)
+        let shouldAccept = false;
+        let shouldIncrement = false;
 
-    window.addEventListener('touchmove', e => {
-      e.preventDefault(); // Varsayılan dokunma davranışını engelle
-      if (e.touches.length > 0) {
-        updateMouseCoordinates(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    });
+        const expectedCharForCurrentIndex = currentWord[currentIndex];
 
-    window.addEventListener('touchend', e => {
-      e.preventDefault(); // Varsayılan dokunma davranışını engelle
-      // touchup event'i için mouseup ile aynı mantığı kullan
-      if (!held) return;
+        if (currentWord === 'ÇOK') {
+            if (currentIndex === 0 && charThrown === 'Ç') {
+                shouldAccept = true;
+                shouldIncrement = true;
+            } else if (currentIndex === 1 && charThrown === 'O') {
+                shouldAccept = true;
+                shouldIncrement = false; // Birden fazla 'O' için indeksi artırma
+            } else if (currentIndex === 1 && charThrown === 'K') {
+                shouldAccept = true;
+                shouldIncrement = true; // 'K' için indeksi artır
+            }
+        } else { // ALTAY, PINAR'A için
+            if (charThrown === expectedCharForCurrentIndex) {
+                shouldAccept = true;
+                shouldIncrement = true;
+            }
+        }
 
-      // Prevent interaction if words are in final static display or during animation
-      if (finalDisplayActive || finalDisplayAnimationRunning) {
-          held = null;
-          return;
-      }
+        if (shouldAccept) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => { // Animasyondan sonraki geri çağırma
+                fixedLetters.push(star);
+                if (shouldIncrement) {
+                    currentIndex++;
+                }
+                recalculateFixedLetterPositions();
+                checkWordCompletion();
+            });
+        } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
+            thrownStar.fixed = false;
+        }
+      }
+      held = null; // Mouseup'tan sonra held her zaman null olduğundan emin ol
+    });
 
-      const charThrown = held.char;
-      const thrownStar = held;
-      // held = null; // Removed from here
 
-      if (dynamicMode) {
-        if (!secondPhase) {
-          options = wordGroups[charThrown] || [];
-          if (options.length > 0) {
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                if (options.length > 1) {
-                    secondPhase = true;
-                    currentIndex = 1;
-                } else {
-                    currentWord = options[0];
-                    dynamicMode = false;
-                    currentIndex = 1;
-                }
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-          }
-        } else {
-          const match = options.find(w => w[1] === charThrown);
-          if (match) {
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                currentWord = match;
-                secondPhase = false;
-                dynamicMode = false;
-                currentIndex = 2;
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-          }
-        }
-      } else {
-        let shouldAccept = false;
-        let shouldIncrement = false;
+    // Dokunmatik Olay Dinleyicileri (Eklenenler)
+    window.addEventListener('touchstart', e => {
+      e.preventDefault(); // Varsayılan dokunma davranışını (kaydırma, yakınlaştırma) engelle
+      if (e.touches.length > 0) {
+        updateMouseCoordinates(e.touches[0].clientX, e.touches[0].clientY);
+        for(let s of stars) {
+          const dx = s.x - mouse.x;
+          const dy = s.y - mouse.y;
+          // Yalnızca sabitlenmemiş ve animasyon yapmayan yıldızları tutmaya izin ver
+          if (Math.hypot(dx, dy) < 40 && !s.fixed && !s.isAnimatingThrow) { // Dokunma için biraz daha geniş alan
+            held = s;
+            break;
+          }
+        }
+      }
+    });
 
-        const expectedCharForCurrentIndex = currentWord[currentIndex];
+    window.addEventListener('touchmove', e => {
+      e.preventDefault(); // Varsayılan dokunma davranışını engelle
+      if (e.touches.length > 0) {
+        updateMouseCoordinates(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
 
-        if (currentWord === 'ÇOK') {
-            if (currentIndex === 0 && charThrown === 'Ç') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            } else if (currentIndex === 1 && charThrown === 'O') {
-                shouldAccept = true;
-                shouldIncrement = false;
-            } else if (currentIndex === 1 && charThrown === 'K') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        } else {
-            if (charThrown === expectedCharForCurrentIndex) {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        }
+    window.addEventListener('touchend', e => {
+      e.preventDefault(); // Varsayılan dokunma davranışını engelle
+      // touchup event'i için mouseup ile aynı mantığı kullan
+      if (!held) return;
 
-        if (shouldAccept) {
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                if (shouldIncrement) {
-                    currentIndex++;
-                }
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-        } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-        }
-      }
-      held = null; // Ensure held is always null after touchend
-    });
+      // Kelimeler son statik gösterimde veya animasyon sırasında etkileşimi engelle
+      if (finalDisplayActive || finalDisplayAnimationRunning) {
+          held = null;
+          return;
+      }
 
-    window.addEventListener('keydown', e => {
-      if (e.code==='Space') { reset(); return; }
-      const k = e.key.toUpperCase();
-      if (letters.includes(k) && !activeKeys.has(k)) {
-        keyTimers[k] = Date.now(); activeKeys.add(k);
-        stars.push(new Star(k));
-      }
-    });
+      const charThrown = held.char;
+      const thrownStar = held;
+      
+      if (dynamicMode) {
+        if (!secondPhase) {
+          options = wordGroups[charThrown] || [];
+          if (options.length > 0) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => {
+                fixedLetters.push(star);
+                if (options.length > 1) {
+                    secondPhase = true;
+                    currentIndex = 1;
+                } else {
+                    currentWord = options[0];
+                    dynamicMode = false;
+                    currentIndex = 1;
+                }
+                recalculateFixedLetterPositions();
+                checkWordCompletion();
+            });
+          } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
+            thrownStar.fixed = false;
+          }
+        } else {
+          const match = options.find(w => w[1] === charThrown);
+          if (match) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => {
+                fixedLetters.push(star);
+                currentWord = match;
+                secondPhase = false;
+                dynamicMode = false;
+                currentIndex = 2;
+                recalculateFixedLetterPositions();
+                checkWordCompletion();
+            });
+          } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
+            thrownStar.fixed = false;
+          }
+        }
+      } else {
+        let shouldAccept = false;
+        let shouldIncrement = false;
 
-    window.addEventListener('keyup', e => {
-      const k = e.key.toUpperCase();
-      if (activeKeys.has(k)) { delete keyTimers[k]; activeKeys.delete(k); }
-    });
+        const expectedCharForCurrentIndex = currentWord[currentIndex];
 
-    window.addEventListener('keydown', e => {
-      if (e.code==='Enter') {
-        const shapes=['❤︎','♡'];
-        for(let i=0;i<15;i++){
-          const x=Math.random()*canvas.width;
-          const y=Math.random()*canvas.height;
-          const heart=new Star(shapes[Math.floor(Math.random()*shapes.length)]);
-          heart.x=x; heart.y=y; heart.fixed=true;
-          stars.push(heart);
-          setTimeout(()=>{
-            const idx=stars.indexOf(heart);
-            if(idx!==-1) stars.splice(idx,1);
-          },2000);
-        }
-      }
-    });
+        if (currentWord === 'ÇOK') {
+            if (currentIndex === 0 && charThrown === 'Ç') {
+                shouldAccept = true;
+                shouldIncrement = true;
+            } else if (currentIndex === 1 && charThrown === 'O') {
+                shouldAccept = true;
+                shouldIncrement = false;
+            } else if (currentIndex === 1 && charThrown === 'K') {
+                shouldAccept = true;
+                shouldIncrement = true;
+            }
+        } else {
+            if (charThrown === expectedCharForCurrentIndex) {
+                shouldAccept = true;
+                shouldIncrement = true;
+            }
+        }
 
-    // Main animation loop
-    function animate() {
-      ctx.clearRect(0,0,canvas.width,canvas.height); // Clear entire canvas
+        if (shouldAccept) {
+            thrownStar.fixed = true; // Harf hemen sabitlendi.
+            bumerangFırlat(thrownStar, (star) => {
+                fixedLetters.push(star);
+                if (shouldIncrement) {
+                    currentIndex++;
+                }
+                recalculateFixedLetterPositions();
+                checkWordCompletion();
+            });
+        } else {
+            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
+            thrownStar.fixed = false;
+        }
+      }
+      held = null; // Touchend'den sonra held her zaman null olduğundan emin ol
+    });
 
-      // Draw panel if words are in final display or during animation
-      if (finalDisplayAnimationRunning || finalDisplayActive) {
-          ctx.save();
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Semi-transparent black
-          // ctx.shadowColor = 'rgba(255, 255, 255, 0.3)'; // GLOW REMOVED
-          // ctx.shadowBlur = 15; // GLOW REMOVED
-          ctx.roundRect(panelRect.x, panelRect.y, panelRect.width, panelRect.height, panelRadius);
-          ctx.fill();
-          ctx.restore(); // Restore context (remove shadow from other drawings)
-      }
+    // Klavye olay dinleyicileri (tuşa basma ile yıldız ekleme ve Boşluk tuşu ile sıfırlama)
+    window.addEventListener('keydown', e => {
+      // Boşluk (Space) tuşu ile oyunu sıfırla
+      if (e.code === 'Space') {
+        reset();
+        return;
+      }
+      const k = e.key.toUpperCase();
+      if (letters.includes(k) && !activeKeys.has(k)) {
+        keyTimers[k] = Date.now();
+        activeKeys.add(k);
+        // Tuşa basıldığında yeni bir yıldız ekle
+        stars.push(new Star(k));
+      }
+    });
 
-      // Particles are always drawn
-      particles.forEach(p=>{ p.update(); p.draw(); });
-      particles = particles.filter(p=>p.life>0);
+    window.addEventListener('keyup', e => {
+      const k = e.key.toUpperCase();
+      if (activeKeys.has(k)) {
+        delete keyTimers[k];
+        activeKeys.delete(k);
+      }
+    });
 
-      // Stars (letters) are always drawn
-      stars.forEach(s=>{ s.update(); s.draw(); }); // Star.update and Star.draw now handle isScatteredHeart and isFinalDisplayStar logic
+    // Ana animasyon döngüsü
+    let lastExplodingHeartTime = 0;
+    let lastShootingStarTime = 0;
+    const explodingHeartInterval = 1000; // 1 saniyede bir patlayan kalp grubu
+    const shootingStarInterval = 2000; // 2 saniyede bir kayan yıldız
 
-      requestAnimationFrame(animate); // Request next animation frame
-    }
-    animate(); // Start animation loop
-  </script>
+    function animate() {
+      ctx.clearRect(0,0,canvas.width,canvas.height); // Tüm canvas'ı temizle
+
+      // Arka plan noktalarını önce çiz
+      backgroundDots.forEach(d => { d.draw(); });
+
+      // Kelimeler son gösterimde veya animasyon sırasında panel çiz
+      if (finalDisplayAnimationRunning || finalDisplayActive) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Yarı şeffaf siyah
+          ctx.roundRect(panelRect.x, panelRect.y, panelRect.width, panelRect.height, panelRadius);
+          ctx.fill();
+          ctx.restore(); // Bağlamı geri yükle (diğer çizimlerden gölgeyi kaldır)
+      }
+
+      // Parçacıklar her zaman çizilir
+      particles.forEach(p=>{ p.update(); p.draw(); });
+      particles = particles.filter(p=>p.life>0);
+
+      // Yıldızlar (harfler) her zaman çizilir
+      stars.forEach(s=>{ s.update(); s.draw(); }); // Star.update ve Star.draw şimdi isScatteredHeart ve isFinalDisplayStar mantığını işler
+
+      // Kayan yıldızları güncelle ve çiz
+      shootingStars.forEach(ss => { ss.update(); ss.draw(); });
+      shootingStars = shootingStars.filter(ss => ss.life > 0);
+
+      // finalDisplayActive true olduğunda yeni efektleri tetikle
+      if (finalDisplayActive) {
+        const currentTime = Date.now();
+        // Patlayan kalpler
+        if (currentTime - lastExplodingHeartTime > explodingHeartInterval) {
+          createExplodingHeartGroup();
+          lastExplodingHeartTime = currentTime;
+        }
+        // Kayan yıldızlar
+        if (currentTime - lastShootingStarTime > shootingStarInterval) {
+          shootingStars.push(new ShootingStar());
+          lastShootingStarTime = currentTime;
+        }
+      }
+
+      // Mevcut hedef kelime rehberliğini çiz (Yalnızca son gösterimde veya dinamik seçim aşamasında değilse, bu kısım silindi.)
+      // Kullanıcının isteği üzerine bilgi metinleri kaldırıldı.
+
+      requestAnimationFrame(animate); // Bir sonraki animasyon karesini iste
+    }
+    animate(); // Animasyon döngüsünü başlat
+  </script>
 </body>
 </html>
