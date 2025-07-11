@@ -59,7 +59,7 @@
     let panelRect = { x: 0, y: 0, width: 0, height: 0 };
     let panelRadius = 20; // Radius for rounded corners of the panel
 
-    // New global variables for additional effects
+    // Ek efektler için yeni global değişkenler
     let shootingStars = []; // For the shooting star effect
     let backgroundDots = []; // For static glowing background dots
 
@@ -184,7 +184,7 @@
         this.size = this.baseSize; // Current font size
         this.alpha = 0.3 + Math.random()*0.7; // Transparency
         this.angle = Math.random()*Math.PI*2; // Initial rotation angle
-        this.spin = (Math.random()-0.5)*0.01; // Rotation speed
+        this.spin = (Math.random()-0.5)*0.01; // Dönüş hızı
         this.fixed = false; // True if the letter is part of a completed word
         this.wordIndex = wordIndex; // Word index this star belongs to (useful for heart transformation)
         this.isAnimatingThrow = false; // True during the throw animation
@@ -198,6 +198,14 @@
         this.isScatteredHeart = false;    // Flag to mark as a scattered heart
         this.isBackgroundDot = false;     // Flag for static glowing background dots
         this.isConstellationStar = false; // True if it's part of a constellation
+        this.isEnteringStar = false;      // True if the star is currently entering the screen
+        this.entryStartTime = 0;          // Start time of entry animation
+        this.entryDuration = 0;           // Duration of entry animation
+        this.entryStartX = 0;             // Starting X for entry
+        this.entryStartY = 0;             // Starting Y for entry
+        this.entryTargetX = 0;            // Target X for entry
+        this.entryTargetY = 0;            // Target Y for entry
+        this.baseAlpha = this.alpha;      // Store initial alpha for entry animation
 
         // New properties for fixed letters: Target positions (for smooth movement)
         this.targetFixedX = null;
@@ -239,6 +247,30 @@
         if (this.isAnimatingThrow) {
           return;
         }
+
+        // If this star is currently entering the screen
+        if (this.isEnteringStar) {
+            const elapsed = Date.now() - this.entryStartTime;
+            const progress = Math.min(1, elapsed / this.entryDuration);
+
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vx *= 0.98; // Slightly less aggressive damping during entry
+            this.vy *= 0.98;
+
+            // Fade in and size change during entry
+            this.alpha = Math.min(this.baseAlpha, progress * 2); // Fade in up to baseAlpha
+            this.size = this.baseSize + (this.baseSize * 0.5) * (1 - progress); // Start larger, shrink to baseSize
+
+            if (progress >= 1) {
+                this.isEnteringStar = false;
+                this.alpha = this.baseAlpha; // Restore original alpha
+                this.size = this.baseSize;   // Restore original size
+                // DO NOT reset vx, vy here. Let them continue with their damped values.
+            }
+            return; // Skip other movement logic while entering
+        }
+
 
         // If this star is a scattered heart, apply unique update logic
         if (this.isScatteredHeart) {
@@ -406,7 +438,7 @@
           ctx.roundRect(-this.size*0.45, -this.size*0.45, this.size*0.9, this.size*0.9, this.size*0.25);
           ctx.fill();
           ctx.restore();
-          ctx.fillStyle = 'white'; // White letter
+          ctx.fillStyle = 'white'; // Beyaz harf
           ctx.shadowColor = 'white'; ctx.shadowBlur = 3; // Slight glow
         } else { // Style for freely floating letters
           ctx.globalAlpha = this.alpha; // Apply transparency
@@ -843,10 +875,14 @@
       if (fixedLetters.length === 1) {
           // If this is the first letter, use its current Y position (it will be the landing spot)
           currentWordBlockY = fixedLetters[0].y;
-      } else {
+      } else if (fixedLetters.length > 1) {
           // For subsequent letters, derive the word's Y position from the first fixed letter's target Y or current Y
           currentWordBlockY = fixedLetters[0].targetFixedY !== null ? fixedLetters[0].targetFixedY : fixedLetters[0].y;
+      } else {
+          // If fixedLetters is empty, set a default Y position (e.g., center of the screen)
+          currentWordBlockY = canvas.height / 2;
       }
+
 
       for (const completedWordStars of allCompletedWordStars) {
           if (completedWordStars.length > 0) {
@@ -871,9 +907,12 @@
       let currentWordBlockStartX;
       if (fixedLetters.length === 1) {
           currentWordBlockStartX = fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
-      } else {
+      } else if (fixedLetters.length > 1) {
           currentWordBlockStartX = fixedLetters[0].targetFixedX !== null ? fixedLetters[0].targetFixedX - (ctx.measureText(fixedLetters[0].char).width / 2) : fixedLetters[0].x - (ctx.measureText(fixedLetters[0].char).width / 2);
+      } else { // If fixedLetters is empty, center the starting position
+          currentWordBlockStartX = (canvas.width - totalCurrentWordWidth) / 2;
       }
+
 
       if (currentWordBlockStartX + totalCurrentWordWidth > canvas.width - minScreenPadding) {
           currentWordBlockStartX = canvas.width - totalCurrentWordWidth - minScreenPadding;
@@ -916,11 +955,13 @@
               dynamicMode = true;
               currentWord = ''; // Clear currentWord to signify dynamic selection phase
               currentIndex = 0; // Reset for dynamic word's first character selection
-              secondPhase = false;
+              options = []; // Clear previous dynamic options
           } else if (wordIndex < wordList.length - 1) { // Move to the next predefined word
               wordIndex++;
               currentWord = wordList[wordIndex];
               currentIndex = 0;
+              dynamicMode = false; // Ensure dynamic mode is off for predefined words
+              options = []; // Clear dynamic options
           } else { // All words (predefined + dynamic) are completed
               initiateFinalWordDisplayAnimation();
           }
@@ -1007,24 +1048,8 @@
       }
     }
 
-    // Mouse Event Listeners
-    window.addEventListener('mousemove', e => {
-      updateMouseCoordinates(e.clientX, e.clientY);
-    });
-
-    window.addEventListener('mousedown', ()=>{
-      for(let s of stars) {
-        const dx = s.x - mouse.x;
-        const dy = s.y - mouse.y;
-        // Only allow holding stars that are not fixed and not currently animating a throw
-        if (Math.hypot(dx, dy) < 20 && !s.fixed && !s.isAnimatingThrow) {
-          held = s;
-          break;
-        }
-      }
-    });
-
-    window.addEventListener('mouseup', ()=>{
+    // Common star release logic
+    function handleStarRelease() {
       if (!held) return;
 
       // Prevent interaction if words are in final static display or during animation
@@ -1036,87 +1061,103 @@
       const charThrown = held.char;
       const thrownStar = held;
       
+      let shouldAccept = false;
+      let shouldIncrementIndex = false;
+      let tempCurrentWord = currentWord; // To potentially update currentWord
+
       if (dynamicMode) {
-        if (!secondPhase) { // Selecting the first letter of the dynamic word
-          options = wordGroups[charThrown] || [];
+        if (fixedLetters.length === 0) { // Placing the FIRST letter of a dynamic word
+          options = wordGroups[charThrown] || []; // Populate options based on first char
           if (options.length > 0) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star); // Add to fixedLetters
-                if (options.length > 1) {
-                    secondPhase = true;
-                    currentIndex = 1; // First character of the dynamic word is selected
-                } else {
-                    currentWord = options[0];
-                    dynamicMode = false;
-                    currentIndex = 1; // First character of the actual dynamic word (e.g., AŞIK)
-                }
-                recalculateFixedLetterPositions(); // Recalculate positions after adding
-                checkWordCompletion(); // Check for completion after adding
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Release if not valid
-            thrownStar.fixed = false; // Ensure it's not fixed
+            shouldAccept = true;
+            if (options.length === 1) { // If only one option, this is the chosen dynamic word
+              tempCurrentWord = options[0]; // Set the chosen word
+              shouldIncrementIndex = true; // Accept and increment index
+              dynamicMode = false; // Set dynamicMode to false as the word is determined
+            } else { // Multiple options, currentWord remains '', waiting for next char to decide
+              shouldIncrementIndex = true; // Accept and increment index for the first char
+            }
           }
-        } else { // secondPhase
-          const match = options.find(w => w[1] === charThrown);
-          if (match) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star); // Add to fixedLetters
-                currentWord = match;
-                secondPhase = false;
-                dynamicMode = false;
-                currentIndex = 2; // Second character of the actual dynamic word
-                recalculateFixedLetterPositions(); // Recalculate positions after adding
-                checkWordCompletion(); // Check for completion after adding
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3; // Release if not valid
-            thrownStar.fixed = false; // Ensure it's not fixed
-          }
-        }
-      } else { // Predefined words (ALTAY, PINAR'A, ÇOK)
-        let shouldAccept = false;
-        let shouldIncrement = false;
+        } else if (fixedLetters.length > 0 && tempCurrentWord === '') { // Placing the SECOND letter to determine the dynamic word
+            // This means fixedLetters.length is 1 (the first char is already placed)
+            let potentialPrefix = fixedLetters[0].char + charThrown;
+            let matchingOptions = options.filter(w => w.startsWith(potentialPrefix)); // Filter based on the new prefix
 
+            if (matchingOptions.length > 0) {
+                shouldAccept = true;
+                if (matchingOptions.length === 1) { // Word is now determined
+                    tempCurrentWord = matchingOptions[0];
+                    shouldIncrementIndex = true; // Accept and increment index
+                    dynamicMode = false; // Set dynamicMode to false as the word is determined
+                } else { // Still multiple options, need more letters (unlikely with current wordGroups)
+                    shouldIncrementIndex = true; // Accept and increment index
+                }
+            }
+        } else { // A dynamic word has already been chosen (tempCurrentWord is not ''), matching against it
+            if (charThrown === tempCurrentWord[currentIndex]) {
+                shouldAccept = true;
+                shouldIncrementIndex = true;
+            }
+        }
+      } else { // Not in dynamic mode, handling predefined words (ALTAY, PINAR'A, ÇOK)
         const expectedCharForCurrentIndex = currentWord[currentIndex];
-
         if (currentWord === 'ÇOK') {
-            if (currentIndex === 0 && charThrown === 'Ç') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            } else if (currentIndex === 1 && charThrown === 'O') {
-                shouldAccept = true;
-                shouldIncrement = false; // Do not increment index for multiple 'O's
-            } else if (currentIndex === 1 && charThrown === 'K') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        } else { // For ALTAY, PINAR'A
-            if (charThrown === expectedCharForCurrentIndex) {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        }
-
-        if (shouldAccept) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => { // Callback after animation
-                fixedLetters.push(star);
-                if (shouldIncrement) {
-                    currentIndex++;
-                }
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-        } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
+          if (currentIndex === 0 && charThrown === 'Ç') {
+            shouldAccept = true;
+            shouldIncrementIndex = true;
+          } else if (currentIndex === 1 && charThrown === 'O') {
+            shouldAccept = true;
+            shouldIncrementIndex = false; // 'O' is accepted, but index doesn't increment for 'ÇOK'
+          } else if (currentIndex === 1 && charThrown === 'K') { // User throws 'K' after 'ÇO'
+            shouldAccept = true;
+            shouldIncrementIndex = true; // Index increments to complete 'ÇOK'
+          }
+        } else { // ALTAY, PINAR'A
+          if (charThrown === expectedCharForCurrentIndex) {
+            shouldAccept = true;
+            shouldIncrementIndex = true;
+          }
         }
       }
-      held = null; // Ensure held is always null after mouseup
+
+      if (shouldAccept) {
+        thrownStar.fixed = true;
+        bumerangFırlat(thrownStar, (star) => {
+          fixedLetters.push(star);
+          if (shouldIncrementIndex) {
+            currentIndex++;
+          }
+          currentWord = tempCurrentWord; // Update the global currentWord here
+          recalculateFixedLetterPositions();
+          checkWordCompletion(); // Check if the word is fully formed
+        });
+      } else {
+        thrownStar.vx = mouse.mx * 0.3;
+        thrownStar.vy = mouse.my * 0.3;
+        thrownStar.fixed = false;
+      }
+      held = null;
+    }
+
+
+    // Mouse Event Listeners
+    window.addEventListener('mousemove', e => {
+      updateMouseCoordinates(e.clientX, e.clientY);
     });
+
+    window.addEventListener('mousedown', ()=>{
+      for(let s of stars) {
+        const dx = s.x - mouse.x;
+        const dy = s.y - mouse.y;
+        // Only allow holding stars that are not fixed and not currently animating a throw
+        if (Math.hypot(dx, dy) < 20 && !s.fixed && !s.isAnimatingThrow && !s.isEnteringStar) { // Cannot drag entering stars
+          held = s;
+          break;
+        }
+      }
+    });
+
+    window.addEventListener('mouseup', handleStarRelease);
 
 
     // Touch Event Listeners (Added)
@@ -1128,7 +1169,7 @@
           const dx = s.x - mouse.x;
           const dy = s.y - mouse.y;
           // Only allow holding stars that are not fixed and not currently animating a throw
-          if (Math.hypot(dx, dy) < 40 && !s.fixed && !s.isAnimatingThrow) { // Slightly larger area for touch
+          if (Math.hypot(dx, dy) < 40 && !s.fixed && !s.isAnimatingThrow && !s.isEnteringStar) { // Slightly larger area for touch, cannot drag entering stars
             held = s;
             break;
           }
@@ -1143,101 +1184,7 @@
       }
     });
 
-    window.addEventListener('touchend', e => {
-      e.preventDefault(); // Prevent default touch behavior
-      // Use the same logic as mouseup for touchend event
-      if (!held) return;
-
-      // Prevent interaction if words are in final static display or during animation
-      if (finalDisplayActive || finalDisplayAnimationRunning) {
-          held = null;
-          return;
-      }
-
-      const charThrown = held.char;
-      const thrownStar = held;
-      
-      if (dynamicMode) {
-        if (!secondPhase) {
-          options = wordGroups[charThrown] || [];
-          if (options.length > 0) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                if (options.length > 1) {
-                    secondPhase = true;
-                    currentIndex = 1;
-                } else {
-                    currentWord = options[0];
-                    dynamicMode = false;
-                    currentIndex = 1;
-                }
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-          }
-        } else {
-          const match = options.find(w => w[1] === charThrown);
-          if (match) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                currentWord = match;
-                secondPhase = false;
-                dynamicMode = false;
-                currentIndex = 2;
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-          } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-          }
-        }
-      } else {
-        let shouldAccept = false;
-        let shouldIncrement = false;
-
-        const expectedCharForCurrentIndex = currentWord[currentIndex];
-
-        if (currentWord === 'ÇOK') {
-            if (currentIndex === 0 && charThrown === 'Ç') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            } else if (currentIndex === 1 && charThrown === 'O') {
-                shouldAccept = true;
-                shouldIncrement = false;
-            } else if (currentIndex === 1 && charThrown === 'K') {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        } else {
-            if (charThrown === expectedCharForCurrentIndex) {
-                shouldAccept = true;
-                shouldIncrement = true;
-            }
-        }
-
-        if (shouldAccept) {
-            thrownStar.fixed = true; // Letter is fixed immediately.
-            bumerangFırlat(thrownStar, (star) => {
-                fixedLetters.push(star);
-                if (shouldIncrement) {
-                    currentIndex++;
-                }
-                recalculateFixedLetterPositions();
-                checkWordCompletion();
-            });
-        } else {
-            thrownStar.vx = mouse.mx * 0.3; thrownStar.vy = mouse.my * 0.3;
-            thrownStar.fixed = false;
-        }
-      }
-      held = null; // Ensure held is always null after touchend
-    });
+    window.addEventListener('touchend', handleStarRelease);
 
     // Keyboard event listeners (add stars on key press and reset on Spacebar)
     window.addEventListener('keydown', e => {
@@ -1292,27 +1239,87 @@
       }
     });
 
-    // Helper function to draw constellation lines
-    function drawConstellationLines(constellationStars, connections) {
-      if (!finalDisplayActive) return; // Only draw when final display is active
+    // Function to create a random letter entering the screen
+    let lastRandomLetterEntryTime = 0;
+    const randomLetterEntryInterval = 10000; // 10 seconds
 
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Light glowing white line
-      ctx.lineWidth = 1;
-      ctx.shadowColor = 'white';
-      ctx.shadowBlur = 5; // Slight glow effect
+    function createRandomLetterEntry() {
+        const randomChar = letters[Math.floor(Math.random() * letters.length)];
+        const newStar = new Star(randomChar);
 
-      connections.forEach(conn => {
-        const fromStar = constellationStars[conn[0]];
-        const toStar = constellationStars[conn[1]];
-        if (fromStar && toStar) {
-          ctx.beginPath();
-          ctx.moveTo(fromStar.x, fromStar.y);
-          ctx.lineTo(toStar.x, toStar.y);
-          ctx.stroke();
+        // Determine entry point (off-screen) and target point (on-screen)
+        const entrySide = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
+
+        let startX, startY;
+        // Target point is a random location within the canvas
+        newStar.entryTargetX = Math.random() * canvas.width;
+        newStar.entryTargetY = Math.random() * canvas.height;
+
+        // Set starting position just outside the canvas
+        if (entrySide === 0) { // Top
+            startX = Math.random() * canvas.width;
+            startY = -newStar.baseSize * 3; // Start above screen
+        } else if (entrySide === 1) { // Right
+            startX = canvas.width + newStar.baseSize * 3; // Start right of screen
+            startY = Math.random() * canvas.height;
+        } else if (entrySide === 2) { // Bottom
+            startX = Math.random() * canvas.width;
+            startY = canvas.height + newStar.baseSize * 3; // Start below screen
+        } else { // Left
+            startX = -newStar.baseSize * 3; // Start left of screen
+            startY = Math.random() * canvas.height;
         }
-      });
-      ctx.restore();
+
+        newStar.x = startX;
+        newStar.y = startY;
+        newStar.entryStartX = startX; // Store start for interpolation (though we're using velocity now)
+        newStar.entryStartY = startY; // Store start for interpolation
+
+        // Calculate initial velocity towards the target
+        const dx = newStar.entryTargetX - newStar.entryStartX;
+        const dy = newStar.entryTargetY - newStar.entryStartY;
+        const distance = Math.hypot(dx, dy);
+        // Increase the range for initial speed
+        const initialSpeed = 5 + Math.random() * 15; // Initial speed for entry (range 5 to 20)
+        newStar.vx = (dx / distance) * initialSpeed;
+        newStar.vy = (dy / distance) * initialSpeed;
+
+
+        newStar.isEnteringStar = true;
+        newStar.entryStartTime = Date.now();
+        // The duration should be long enough for the damping to take effect
+        // and for the star to reach its general target area.
+        newStar.entryDuration = 1500 + Math.random() * 1000; // 1.5-2.5 seconds to enter (slightly shorter)
+
+        // Initial alpha and size for entry animation
+        newStar.alpha = 0; // Start invisible
+        newStar.size = newStar.baseSize * 1.5; // Start a bit larger
+
+        stars.push(newStar);
+    }
+
+    // Function to draw constellation lines
+    function drawConstellationLines(constellationStars, connections) {
+        if (!finalDisplayActive || constellationStars.length === 0) return;
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White lines, semi-transparent
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = 5;
+
+        connections.forEach(conn => {
+            const startStar = constellationStars[conn[0]];
+            const endStar = constellationStars[conn[1]];
+
+            if (startStar && endStar) {
+                ctx.beginPath();
+                ctx.moveTo(startStar.x, startStar.y);
+                ctx.lineTo(endStar.x, endStar.y);
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
     }
 
 
@@ -1366,22 +1373,17 @@
         drawConstellationLines(virgoConstellationStars, virgoConnections);
       }
 
+      // Random letter entry effect
+      const currentTime = Date.now();
+      if (currentTime - lastRandomLetterEntryTime > randomLetterEntryInterval) {
+        createRandomLetterEntry();
+        lastRandomLetterEntryTime = currentTime;
+      }
+
+
       requestAnimationFrame(animate); // Request the next animation frame
     }
     animate(); // Start the animation loop
   </script>
 </body>
-<audio id="bg-music" autoplay loop>
-  <source src="stars-will-align.mp3" type="audio/mpeg">
-  Tarayıcınız bu ses dosyasını desteklemiyor.
-</audio>
-
-<script>
-  window.addEventListener('click', function () {
-    const music = document.getElementById('bg-music');
-    if (music && music.paused) {
-      music.play().catch(e => console.log("Müzik oynatılamadı:", e));
-    }
-  }, { once: true });
-</script>
 </html>
