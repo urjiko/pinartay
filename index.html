@@ -1386,4 +1386,16 @@
     animate(); // Start the animation loop
   </script>
 </body>
+  <audio id="bg-music" autoplay loop>
+  <source src="stars-will-align.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  window.addEventListener('click', function () {
+    const music = document.getElementById('bg-music');
+    if (music && music.paused) {
+      music.play().catch(e => console.log("Müzik oynatılamadı:", e));
+    }
+  }, { once: true });
+</script>
 </html>
